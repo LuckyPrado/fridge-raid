@@ -1,0 +1,137 @@
+"""The Chef: proposes dishes that use what is in the fridge, expiring food first."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Sequence
+
+from app.agents.base import SERVINGS, RaidContext, Rejection, dish_from_draft, inventory_lines
+from app.catalog import normalize_name
+from app.llm import LLM, LLMError
+from app.optimizer import RISK_DAYS
+from app.schemas import ChefDraft, Dish
+
+CHEF_SYSTEM = f"""You are the Chef in a party of AI agents raiding a fridge. The enemy is food waste.
+You are bold, dramatic, and obsessed with using food before it expires.
+
+Rules:
+- Every dish serves {SERVINGS}. Give nutrition per serving.
+- Build each dish around items with the fewest days left. Never ignore the "must use" items.
+- Prefer ingredients already in the fridge. Add at most 3 ingredients that must be bought.
+- For ingredient names and units, use the grocery catalog spelling and unit exactly when the item is listed there.
+- Do not list salt, pepper, oil, sugar, or water.
+- "pitch" is one punchy in-character line of at most 20 words. "description" is one plain sentence.
+- Make the dishes clearly different from each other."""
+
+AT_RISK_BONUS = 3.0
+IN_STOCK_BONUS = 1.0
+MISSING_PENALTY = 1.5
+ARENA_BONUS = 4.0
+
+
+def _goal_lines(ctx: RaidContext) -> str:
+    goals = ctx.goals
+    return (
+        f"Diet: {goals.diet}. Per serving: at most {goals.max_calories} calories, "
+        f"at most {goals.max_sodium_mg} mg sodium, at least {goals.min_protein_g} g protein. "
+        f"Weekly shopping budget: ${goals.budget:.2f}."
+    )
+
+
+def _base_prompt(ctx: RaidContext) -> str:
+    must_use = ", ".join(ctx.arena_names) or "none chosen"
+    return (
+        f"Fridge inventory:\n{inventory_lines(ctx.inventory)}\n\n"
+        f"Must use (dragged into the arena): {must_use}\n\n"
+        f"Player goals: {_goal_lines(ctx)}\n\n"
+        f"Grocery catalog (name and unit): {ctx.catalog.prompt_lines()}"
+    )
+
+
+def _to_dishes(draft: ChefDraft, limit: int) -> tuple[Dish, ...]:
+    dishes = tuple(dish for dish in map(dish_from_draft, draft.dishes) if dish is not None)
+    if not dishes:
+        raise LLMError("Chef returned no usable dishes.")
+    return dishes[:limit]
+
+
+class GeminiChef:
+    def __init__(self, llm: LLM) -> None:
+        self._llm = llm
+
+    async def propose(self, ctx: RaidContext, count: int) -> tuple[Dish, ...]:
+        prompt = f"{_base_prompt(ctx)}\n\nPropose exactly {count} dishes."
+        draft = await self._llm.generate(system=CHEF_SYSTEM, prompt=prompt, schema=ChefDraft)
+        return _to_dishes(draft, count)
+
+    async def revise(
+        self, ctx: RaidContext, rejections: Sequence[Rejection], taken_names: Sequence[str]
+    ) -> tuple[Dish, ...]:
+        objections = "\n".join(f'- "{r.dish.name}" was vetoed: {r.reason}' for r in rejections)
+        prompt = (
+            f"{_base_prompt(ctx)}\n\n"
+            f"The Nutritionist vetoed these dishes:\n{objections}\n\n"
+            f"Already on the table, do not repeat: {', '.join(taken_names) or 'nothing'}\n\n"
+            f"Propose exactly {len(rejections)} replacement dishes that fix the objections "
+            "while still using the expiring food. Each pitch should react to the veto."
+        )
+        draft = await self._llm.generate(system=CHEF_SYSTEM, prompt=prompt, schema=ChefDraft)
+        return _to_dishes(draft, len(rejections))
+
+
+def load_recipes(path: Path) -> tuple[Dish, ...]:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Could not load recipe book from {path}") from exc
+    return tuple(Dish.model_validate(entry) for entry in raw)
+
+
+class OfflineChef:
+    """Rule-based Chef that works without a network, from a bundled recipe book."""
+
+    def __init__(self, recipes: tuple[Dish, ...]) -> None:
+        self._recipes = recipes
+
+    def _score(self, recipe: Dish, ctx: RaidContext) -> float:
+        days_left = {normalize_name(item.name): item.days_left for item in ctx.inventory}
+        arena = {normalize_name(name) for name in ctx.arena_names}
+        score = 0.0
+        for ingredient in recipe.ingredients:
+            key = normalize_name(ingredient.name)
+            if key not in days_left:
+                score -= MISSING_PENALTY
+                continue
+            score += AT_RISK_BONUS if days_left[key] <= RISK_DAYS else IN_STOCK_BONUS
+            if key in arena:
+                score += ARENA_BONUS
+        return score
+
+    def _ranked(self, ctx: RaidContext, exclude: Sequence[str]) -> list[Dish]:
+        taken = {name.lower() for name in exclude}
+        diet = ctx.goals.diet
+        eligible = [
+            recipe
+            for recipe in self._recipes
+            if recipe.name.lower() not in taken and (diet == "none" or diet in recipe.diets)
+        ]
+        return sorted(eligible, key=lambda recipe: self._score(recipe, ctx), reverse=True)
+
+    async def propose(self, ctx: RaidContext, count: int) -> tuple[Dish, ...]:
+        return tuple(self._ranked(ctx, exclude=())[:count])
+
+    async def revise(
+        self, ctx: RaidContext, rejections: Sequence[Rejection], taken_names: Sequence[str]
+    ) -> tuple[Dish, ...]:
+        goals = ctx.goals
+        within_limits = [
+            recipe
+            for recipe in self._ranked(ctx, exclude=taken_names)
+            if recipe.calories <= goals.max_calories and recipe.sodium_mg <= goals.max_sodium_mg
+        ]
+        replacements = within_limits[: len(rejections)]
+        return tuple(
+            dish.model_copy(update={"pitch": f"Fine! Out goes {rejection.dish.name}. {dish.pitch}"})
+            for dish, rejection in zip(replacements, rejections)
+        )

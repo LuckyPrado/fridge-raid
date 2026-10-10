@@ -1,0 +1,65 @@
+[
+  {
+    "id": "dorm",
+    "title": "The Dorm Fridge",
+    "blurb": "Finals week. Nobody has shopped in nine days.",
+    "items": [
+      {"name": "spinach", "category": "produce", "quantity": 4, "unit": "cup", "days_left": 1},
+      {"name": "mushroom", "category": "produce", "quantity": 2, "unit": "cup", "days_left": 1},
+      {"name": "tomato", "category": "produce", "quantity": 3, "unit": "whole", "days_left": 2},
+      {"name": "berries", "category": "produce", "quantity": 1, "unit": "cup", "days_left": 1},
+      {"name": "scallion", "category": "produce", "quantity": 4, "unit": "whole", "days_left": 3},
+      {"name": "garlic", "category": "produce", "quantity": 6, "unit": "clove", "days_left": 20},
+      {"name": "egg", "category": "dairy", "quantity": 8, "unit": "egg", "days_left": 9},
+      {"name": "milk", "category": "dairy", "quantity": 2, "unit": "cup", "days_left": 1},
+      {"name": "yogurt", "category": "dairy", "quantity": 2, "unit": "cup", "days_left": 2},
+      {"name": "cheddar", "category": "dairy", "quantity": 1, "unit": "cup", "days_left": 6},
+      {"name": "bacon", "category": "protein", "quantity": 6, "unit": "slice", "days_left": 3},
+      {"name": "tortilla", "category": "grain", "quantity": 6, "unit": "whole", "days_left": 4},
+      {"name": "ramen noodles", "category": "grain", "quantity": 3, "unit": "pack", "days_left": 200},
+      {"name": "rice", "category": "grain", "quantity": 4, "unit": "cup", "days_left": 300},
+      {"name": "salsa", "category": "condiment", "quantity": 1, "unit": "cup", "days_left": 12},
+      {"name": "soy sauce", "category": "condiment", "quantity": 8, "unit": "tbsp", "days_left": 300}
+    ]
+  },
+  {
+    "id": "mealprep",
+    "title": "The Abandoned Meal Prep",
+    "blurb": "Sunday had big plans. It is now Thursday.",
+    "items": [
+      {"name": "chicken breast", "category": "protein", "quantity": 2, "unit": "piece", "days_left": 1},
+      {"name": "salmon", "category": "protein", "quantity": 2, "unit": "fillet", "days_left": 1},
+      {"name": "avocado", "category": "produce", "quantity": 2, "unit": "whole", "days_left": 1},
+      {"name": "broccoli", "category": "produce", "quantity": 4, "unit": "cup", "days_left": 2},
+      {"name": "kale", "category": "produce", "quantity": 5, "unit": "cup", "days_left": 2},
+      {"name": "zucchini", "category": "produce", "quantity": 2, "unit": "whole", "days_left": 2},
+      {"name": "bell pepper", "category": "produce", "quantity": 2, "unit": "whole", "days_left": 3},
+      {"name": "sweet potato", "category": "produce", "quantity": 2, "unit": "whole", "days_left": 14},
+      {"name": "onion", "category": "produce", "quantity": 2, "unit": "whole", "days_left": 20},
+      {"name": "lemon", "category": "produce", "quantity": 2, "unit": "whole", "days_left": 10},
+      {"name": "garlic", "category": "produce", "quantity": 8, "unit": "clove", "days_left": 20},
+      {"name": "egg", "category": "dairy", "quantity": 4, "unit": "egg", "days_left": 12},
+      {"name": "rice", "category": "grain", "quantity": 6, "unit": "cup", "days_left": 300},
+      {"name": "soy sauce", "category": "condiment", "quantity": 10, "unit": "tbsp", "days_left": 300}
+    ]
+  },
+  {
+    "id": "leftovers",
+    "title": "The After-Party",
+    "blurb": "Guests left. The cheese board did not.",
+    "items": [
+      {"name": "basil", "category": "produce", "quantity": 1, "unit": "bunch", "days_left": 1},
+      {"name": "tomato", "category": "produce", "quantity": 4, "unit": "whole", "days_left": 1},
+      {"name": "cream", "category": "dairy", "quantity": 1, "unit": "cup", "days_left": 2},
+      {"name": "mozzarella", "category": "dairy", "quantity": 1, "unit": "cup", "days_left": 3},
+      {"name": "deli turkey", "category": "protein", "quantity": 6, "unit": "slice", "days_left": 2},
+      {"name": "sausage", "category": "protein", "quantity": 4, "unit": "link", "days_left": 2},
+      {"name": "bread", "category": "grain", "quantity": 8, "unit": "slice", "days_left": 2},
+      {"name": "egg", "category": "dairy", "quantity": 3, "unit": "egg", "days_left": 10},
+      {"name": "parmesan", "category": "dairy", "quantity": 8, "unit": "tbsp", "days_left": 40},
+      {"name": "pasta", "category": "grain", "quantity": 4, "unit": "cup", "days_left": 300},
+      {"name": "pesto", "category": "condiment", "quantity": 3, "unit": "tbsp", "days_left": 14},
+      {"name": "hot sauce", "category": "condiment", "quantity": 10, "unit": "tbsp", "days_left": 300}
+    ]
+  }
+]
