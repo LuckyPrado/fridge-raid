@@ -79,7 +79,7 @@ All settings live in `backend/.env`. See `backend/.env.example`.
 | Variable | Purpose | If empty |
 |---|---|---|
 | `GEMINI_API_KEY` | Live agents and photo scanning | Rule-based agents, and the camera scans a sample fridge |
-| `GEMINI_MODEL` | Gemini model ID | `gemini-2.5-flash` |
+| `GEMINI_MODEL` | Gemini model ID | `gemini-3.8-flash` |
 | `DATABASE_URL` | Tiger Data connection string | Local SQLite file |
 
 ## Demo script

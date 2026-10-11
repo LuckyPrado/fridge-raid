@@ -76,7 +76,7 @@ def build_services(
         bargain_hunter=OfflineBargainHunter(),
     )
     if llm is None and settings.gemini_api_key:
-        llm = GeminiLLM(settings.gemini_api_key, settings.gemini_model)
+        llm = GeminiLLM(settings.gemini_api_key, settings.gemini_model, settings.gemini_fallback_models)
     live_party = None
     if llm is not None:
         live_party = Party(
