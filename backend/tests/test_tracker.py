@@ -344,3 +344,37 @@ def test_stores_list_sample_deals_below_the_regular_price(client: TestClient) ->
     assert len(stores) >= 2
     assert all(deal["price"] < deal["list_price"] for entry in stores for deal in entry["deals"])
     assert all(entry["deals"] for entry in stores)
+
+
+@pytest.mark.unit
+def test_store_quotes_are_ranked_and_explained(catalog: Catalog) -> None:
+    from app.deals import comparison_line, quote_stores
+
+    dish = make_dish("Cheese Omelette", {"cheese": 1, "egg": 2})
+    stores = [_store("pricey", 0.2), _store("deal", 1.5, cheese=2.50)]
+
+    quotes = quote_stores([dish], [], catalog, stores, budget=20.0, max_meals=1)
+
+    assert [(quote.store.info.id, quote.plan.total_cost) for quote in quotes] == [("deal", 5.50), ("pricey", 7.00)]
+    assert comparison_line(quotes) == "I priced your list at 2 stores. Deal wins at $5.50. Pricey would be $7.00."
+
+
+@pytest.mark.unit
+def test_store_comparison_says_so_when_nothing_needs_buying(catalog: Catalog) -> None:
+    from app.deals import comparison_line, quote_stores
+
+    dish = make_dish("Eggs", {"egg": 2})
+    quotes = quote_stores([dish], [make_item("egg", 6, 5)], catalog, [_store("a", 1.0)], budget=5.0, max_meals=1)
+
+    assert "need nothing" in comparison_line(quotes)
+
+
+@pytest.mark.integration
+def test_planning_streams_the_store_comparison(client: TestClient) -> None:
+    fridges = client.get("/api/demo-fridges").json()["data"]
+    events = _events(client.post("/api/raid", json={"inventory": fridges[0]["items"]}).text)
+    stores = next(event for event in events if event["type"] == "stores")
+
+    assert len(stores["quotes"]) >= 2
+    assert [quote["chosen"] for quote in stores["quotes"]].count(True) == 1
+    assert stores["quotes"][0]["chosen"] and stores["quotes"][0]["name"] in stores["text"]

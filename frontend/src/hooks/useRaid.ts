@@ -12,6 +12,7 @@ const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(r
 export interface RaidControls {
   raid: RaidState;
   start: (request: RaidRequest) => Promise<void>;
+  /** Jump to the result. If the live agents have not finished, the quick rule-based agents plan instead. */
   skip: () => void;
   reset: () => void;
 }
@@ -28,17 +29,23 @@ export function useRaid(): RaidControls {
     setRaid(IDLE_RAID);
   }, []);
 
-  const start = useCallback(async (request: RaidRequest) => {
+  const lastRequest = useRef<RaidRequest | null>(null);
+  const hasPlan = useRef(false);
+
+  const run = useCallback(async (request: RaidRequest, isFast: boolean) => {
     controller.current?.abort();
     const current = new AbortController();
     controller.current = current;
-    fastForward.current = false;
+    fastForward.current = isFast;
+    lastRequest.current = request;
+    hasPlan.current = false;
     setRaid(beginRaid());
     try {
       for await (const event of streamRaid(request, current.signal)) {
         if (current.signal.aborted) {
           return;
         }
+        hasPlan.current = hasPlan.current || event.type === "plan";
         setRaid((state) => applyEvent(state, event));
         if (!fastForward.current) {
           await sleep(EVENT_PACE_MS[event.type]);
@@ -57,9 +64,16 @@ export function useRaid(): RaidControls {
     }
   }, []);
 
+  const start = useCallback((request: RaidRequest) => run(request, false), [run]);
+
   const skip = useCallback(() => {
     fastForward.current = true;
-  }, []);
+    const request = lastRequest.current;
+    // Fast-forwarding cannot hurry a live model. Hand the plan to the instant rule-based agents instead.
+    if (request && !request.offline && !hasPlan.current) {
+      void run({ ...request, offline: true }, true);
+    }
+  }, [run]);
 
   useEffect(() => () => controller.current?.abort(), []);
 

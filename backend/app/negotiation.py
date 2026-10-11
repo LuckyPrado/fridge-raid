@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Mapping, Sequence, T
 
 from app.agents.base import Party, RaidContext, Rejection
 from app.catalog import Catalog
-from app.deals import Store, best_store_plan
+from app.deals import Store, best_store_plan, comparison_line, quote_stores
 from app.llm import LLMError
 from app.optimizer import AtRisk, at_risk_items, build_cart, cart_total, rescued, stock_of, waste_value_total
 from app.schemas import Dish, RaidRequest, Verdict
@@ -131,9 +131,22 @@ async def _settle(
     state: _RaidState,
     stores: Sequence[Store],
 ) -> AsyncIterator[Event]:
-    plan, shop = best_store_plan(
-        state.approved, ctx.inventory, ctx.catalog, stores, ctx.goals.budget, ctx.goals.meals
-    )
+    quotes = quote_stores(state.approved, ctx.inventory, ctx.catalog, stores, ctx.goals.budget, ctx.goals.meals)
+    if quotes:
+        plan, shop = quotes[0].plan, quotes[0].shop
+    else:
+        plan, shop = best_store_plan(state.approved, ctx.inventory, ctx.catalog, (), ctx.goals.budget, ctx.goals.meals)
+    if quotes and plan.dishes:
+        yield _event(
+            "stores", agent="bargain_hunter", text=comparison_line(quotes),
+            quotes=[
+                {
+                    "name": quote.store.info.name, "distance_mi": quote.store.info.distance_mi,
+                    "total": quote.plan.total_cost, "meals": len(quote.plan.dishes), "chosen": index == 0,
+                }
+                for index, quote in enumerate(quotes)
+            ],
+        )
     boss_max = waste_value_total(risky)
     previous_saved = 0.0
     for index, dish in enumerate(plan.dishes, start=1):

@@ -70,6 +70,32 @@ def _rank(plan: WeekPlan, store: Store) -> tuple[float, int, float, float]:
     return (plan.waste_value_saved, len(plan.dishes), -plan.total_cost, -store.info.distance_mi)
 
 
+@dataclass(frozen=True)
+class StoreQuote:
+    """What the plan would look like if all the shopping happened at one store."""
+
+    store: Store
+    plan: WeekPlan
+    shop: Catalog
+
+
+def quote_stores(
+    candidates: Sequence[Dish],
+    inventory: Sequence[InventoryItem],
+    catalog: Catalog,
+    stores: Sequence[Store],
+    budget: float,
+    max_meals: int,
+) -> tuple[StoreQuote, ...]:
+    """Plan a one-stop shop at every store. Best first: most food rescued, most meals, lowest cost, nearest."""
+    quotes = []
+    for store in stores:
+        shop = store_catalog(store, catalog)
+        plan = optimize_plan(candidates, inventory, catalog, budget, max_meals, shop=shop)
+        quotes.append(StoreQuote(store=store, plan=plan.model_copy(update={"store": store.info}), shop=shop))
+    return tuple(sorted(quotes, key=lambda quote: _rank(quote.plan, quote.store), reverse=True))
+
+
 def best_store_plan(
     candidates: Sequence[Dish],
     inventory: Sequence[InventoryItem],
@@ -78,17 +104,21 @@ def best_store_plan(
     budget: float,
     max_meals: int,
 ) -> tuple[WeekPlan, Catalog]:
-    """Plan a one-stop shop at every store and keep the best. Returns the plan and that store's prices.
-
-    Ranking matches the optimizer: most food rescued, most meals, lowest cost, then the nearest store.
-    """
-    if not stores:
+    """The best one-stop plan across all stores, with that store's prices."""
+    quotes = quote_stores(candidates, inventory, catalog, stores, budget, max_meals)
+    if not quotes:
         return optimize_plan(candidates, inventory, catalog, budget, max_meals), catalog
-    best: tuple[WeekPlan, Catalog, Store] | None = None
-    for store in stores:
-        shop = store_catalog(store, catalog)
-        plan = optimize_plan(candidates, inventory, catalog, budget, max_meals, shop=shop)
-        if best is None or _rank(plan, store) > _rank(best[0], best[2]):
-            best = (plan, shop, store)
-    plan, shop, store = best
-    return plan.model_copy(update={"store": store.info}), shop
+    return quotes[0].plan, quotes[0].shop
+
+
+def comparison_line(quotes: Sequence[StoreQuote]) -> str:
+    """The Shopper explaining the store choice, with the real totals."""
+    best = quotes[0]
+    meals = len(best.plan.dishes)
+    if best.plan.total_cost == 0:
+        return f"I checked {len(quotes)} stores, but these {meals} meals need nothing from any of them."
+    line = f"I priced your list at {len(quotes)} stores. {best.store.info.name} wins at ${best.plan.total_cost:.2f}."
+    if len(quotes) > 1:
+        runner_up = quotes[1]
+        line += f" {runner_up.store.info.name} would be ${runner_up.plan.total_cost:.2f}."
+    return line

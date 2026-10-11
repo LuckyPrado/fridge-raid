@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Dish, RaidEvent, WeekPlan } from "../types";
-import { applyEvent, beginRaid, IDLE_RAID } from "./raid";
+import { applyEvent, beginRaid, IDLE_RAID, waitingOn } from "./raid";
 import { parseFrame } from "./stream";
 
 const dish = (id: string, name: string): Dish => ({
@@ -111,4 +111,30 @@ describe("parseFrame", () => {
       expect(parseFrame(frame)).toBeNull();
     },
   );
+});
+
+describe("waitingOn", () => {
+  const proposal = (id: string, round: number): RaidEvent => ({ type: "proposal", agent: "chef", round, dish: dish(id, id), text: "" });
+  const verdict = (id: string, veto: boolean): RaidEvent => ({
+    type: "verdict", agent: "nutritionist", dish_id: id, dish_name: id, score: 50, veto, text: "",
+  });
+
+  it("names the agent the plan is waiting on at each stage", () => {
+    expect(waitingOn(IDLE_RAID)).toBeNull();
+    expect(waitingOn(beginRaid())).toBe("chef");
+    expect(waitingOn(play([proposal("d1", 1)]))).toBe("nutritionist");
+    expect(waitingOn(play([proposal("d1", 1), verdict("d1", false)]))).toBe("bargain_hunter");
+    expect(waitingOn(play([proposal("d1", 1), verdict("d1", true)]))).toBe("chef");
+    expect(waitingOn(play([proposal("d1", 1), verdict("d1", true), proposal("d2", 2)]))).toBe("nutritionist");
+    expect(waitingOn(play([proposal("d1", 1), verdict("d1", false), { type: "done" }]))).toBeNull();
+  });
+
+  it("keeps the store comparison and lets the Shopper explain it", () => {
+    const quotes = [{ name: "Corner Pantry", distance_mi: 0.7, total: 12.45, meals: 4, chosen: true }];
+    const state = play([{ type: "stores", agent: "bargain_hunter", text: "Corner Pantry wins.", quotes }]);
+
+    expect(state.quotes).toEqual(quotes);
+    expect(state.bubbles.bargain_hunter).toBe("Corner Pantry wins.");
+    expect(state.speaker).toBe("bargain_hunter");
+  });
 });

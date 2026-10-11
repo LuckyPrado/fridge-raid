@@ -17,11 +17,40 @@ import { Shop } from "./screens/Shop";
 import { Button, Icon, IconButton } from "./ui/kit";
 
 const TOAST_MS = 2600;
+const SCREEN_KEY = "fridge-raid:screen";
+const SCREEN_NAMES: readonly string[] = ["home", "scan", "fridge", "huddle", "chef", "recipe", "goals", "shop", "plan"];
+
+/** Phones reload a page that was left in the background. Remember the screen so the player lands where they were. */
+function restoreScreen(): Screen {
+  try {
+    const stored: unknown = JSON.parse(window.sessionStorage.getItem(SCREEN_KEY) ?? "null");
+    if (typeof stored === "object" && stored !== null) {
+      const { name, dishId } = stored as { name?: unknown; dishId?: unknown };
+      if (name === "recipe" && typeof dishId === "string") {
+        return { name, dishId };
+      }
+      if (typeof name === "string" && name !== "recipe" && SCREEN_NAMES.includes(name)) {
+        return { name } as Screen;
+      }
+    }
+  } catch {
+    // Storage is blocked or holds something unreadable. Start on Home.
+  }
+  return { name: "home" };
+}
+
+function rememberScreen(screen: Screen): void {
+  try {
+    window.sessionStorage.setItem(SCREEN_KEY, JSON.stringify(screen));
+  } catch {
+    // Private browsing can block storage. The app still works without it.
+  }
+}
 
 export function App() {
   const kitchen = useKitchen();
   const raid = useRaid();
-  const [screen, setScreen] = useState<Screen>({ name: "home" });
+  const [screen, setScreen] = useState<Screen>(restoreScreen);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | null>(null);
   const { reloadPlan } = kitchen;
@@ -29,6 +58,7 @@ export function App() {
 
   const go = useCallback((next: Screen) => {
     setScreen(next);
+    rememberScreen(next);
     window.scrollTo({ top: 0 });
   }, []);
 
@@ -50,6 +80,8 @@ export function App() {
   useEffect(() => {
     if (raidPhase === "settled") {
       void reloadPlan();
+      // If the phone reloads the page now, land on the finished recipes instead of planning again.
+      rememberScreen({ name: "chef" });
     }
   }, [raidPhase, reloadPlan]);
 
@@ -61,6 +93,20 @@ export function App() {
     void raid.start({ inventory: kitchen.inventory, arena: [], goals: kitchen.profile.goals, offline: false });
     go({ name: "huddle" });
   };
+
+  // After a reload in the middle of planning there is no plan in progress any more, so start it again.
+  const hasResumed = useRef(false);
+  useEffect(() => {
+    if (!kitchen.hasLoaded || hasResumed.current) {
+      return;
+    }
+    hasResumed.current = true;
+    if (screen.name === "huddle" && raidPhase === "idle") {
+      startPlanning();
+    }
+    // Runs once, when the first load finishes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kitchen.hasLoaded]);
 
   const handleTab = (tab: TabId) => go({ name: tab });
   const activeTab = tabOf(screen.name);

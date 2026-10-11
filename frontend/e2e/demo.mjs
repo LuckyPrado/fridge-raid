@@ -65,11 +65,17 @@ await page.getByText("5 cup · produce").waitFor();
 
 // The party plans. The Nutritionist vetoes one dish and the Chef revises.
 await page.getByRole("button", { name: /Confirm stash/ }).click();
+await page.getByText(/is (dreaming|checking|pricing)/).waitFor();
 await page.getByText("Vetoed").first().waitFor({ timeout: 30000 });
 await shot("4-huddle");
+
+// Leaving and coming back reloads the page on a phone. Planning must pick up again, not drop to Home.
+await page.reload();
+await page.getByRole("button", { name: /Skip/ }).waitFor({ timeout: 15000 });
 await page.getByRole("button", { name: "Skip to the plan" }).click();
 await page.getByRole("button", { name: /See my \d recipes/ }).waitFor({ timeout: 30000 });
 check(await page.getByText(/Take 2/).count() > 0, "huddle: no revised dish after the veto");
+check(await page.getByText("Best", { exact: true }).count() === 1, "huddle: no store comparison");
 await shot("5-huddle-done");
 await noSidewaysScroll("huddle");
 await page.getByRole("button", { name: /See my \d recipes/ }).click();
@@ -118,7 +124,9 @@ await noSidewaysScroll("plan");
 
 // Everything survives a reload.
 await page.reload();
-await page.getByRole("heading", { name: "Fridge Raid" }).waitFor();
+await page.getByRole("heading", { name: "Your shopping loot" }).waitFor();
+check(await page.getByRole("checkbox", { checked: true }).count() === 1, "plan: checked item lost after reload");
+await tab("Home").click();
 await page.getByText("Hey, Alex").waitFor();
 await tab("Chef").click();
 await page.getByText("Cooked and logged").first().waitFor();

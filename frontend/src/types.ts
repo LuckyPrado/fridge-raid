@@ -185,12 +185,21 @@ export interface FoodLogInput {
   sodium_mg: number;
 }
 
+export interface StoreQuote {
+  name: string;
+  distance_mi: number;
+  total: number;
+  meals: number;
+  chosen: boolean;
+}
+
 export type RaidEvent =
   | { type: "boss"; max_hp: number; hp: number; party: string; at_risk: string[] }
   | { type: "proposal"; agent: AgentId; round: number; dish: Dish; text: string }
   | { type: "verdict"; agent: AgentId; dish_id: string; dish_name: string; score: number; veto: boolean; text: string }
   | { type: "cost"; agent: AgentId; dish_id: string; dish_name: string; cost: number; text: string }
   | { type: "strike"; dish_id: string; dish_name: string; damage: number; hp: number; spent: number }
+  | { type: "stores"; agent: AgentId; text: string; quotes: StoreQuote[] }
   | { type: "system"; text: string }
   | { type: "summary"; agent: AgentId; text: string }
   | { type: "plan"; plan: WeekPlan }

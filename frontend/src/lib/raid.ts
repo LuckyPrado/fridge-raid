@@ -1,4 +1,4 @@
-import type { AgentId, Dish, RaidEvent, WeekPlan } from "../types";
+import type { AgentId, Dish, RaidEvent, StoreQuote, WeekPlan } from "../types";
 
 export type RaidPhase = "idle" | "raiding" | "settled" | "failed";
 
@@ -26,6 +26,7 @@ export interface RaidState {
   bubbles: Partial<Record<AgentId, string>>;
   speaker: AgentId | null;
   notes: string[];
+  quotes: StoreQuote[];
   plan: WeekPlan | null;
   error: string | null;
   strikes: number;
@@ -41,10 +42,33 @@ export const IDLE_RAID: RaidState = {
   bubbles: {},
   speaker: null,
   notes: [],
+  quotes: [],
   plan: null,
   error: null,
   strikes: 0,
 };
+
+/**
+ * Which agent the app is waiting on right now, judged from what has arrived so far.
+ * The Chef pitches first, the Nutritionist reviews open pitches, and the Shopper settles the plan.
+ */
+export function waitingOn(state: RaidState): AgentId | null {
+  if (state.phase !== "raiding") {
+    return null;
+  }
+  if (state.dishes.length === 0) {
+    return "chef";
+  }
+  if (state.dishes.some((entry) => entry.verdict === null)) {
+    return "nutritionist";
+  }
+  const openVetoes = state.dishes.filter((entry) => entry.verdict?.veto).length;
+  const revisions = state.dishes.filter((entry) => entry.round > 1).length;
+  if (openVetoes > revisions && state.quotes.length === 0 && state.strikes === 0) {
+    return "chef";
+  }
+  return "bargain_hunter";
+}
 
 export function beginRaid(): RaidState {
   return { ...IDLE_RAID, phase: "raiding" };
@@ -80,6 +104,8 @@ export function applyEvent(state: RaidState, event: RaidEvent): RaidState {
       const struck = updateDish(state, event.dish_id, { damage: event.damage });
       return { ...struck, bossHp: event.hp, spent: event.spent, strikes: state.strikes + 1, speaker: null };
     }
+    case "stores":
+      return say({ ...state, quotes: event.quotes }, "bargain_hunter", event.text);
     case "system":
       return { ...state, notes: [...state.notes, event.text] };
     case "summary":
@@ -100,6 +126,7 @@ export const EVENT_PACE_MS: Record<RaidEvent["type"], number> = {
   verdict: 1400,
   cost: 1100,
   strike: 1000,
+  stores: 1800,
   system: 900,
   summary: 600,
   plan: 0,

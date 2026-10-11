@@ -1,7 +1,9 @@
+import { useEffect, useState } from "react";
+
 import type { RaidControls } from "../hooks/useRaid";
 import { money, plural } from "../lib/food";
 import { filledSegments } from "../lib/plan";
-import type { DishEntry, RaidState } from "../lib/raid";
+import { waitingOn, type DishEntry, type RaidState } from "../lib/raid";
 import type { Go } from "../nav";
 import { AGENT_NAMES } from "../pixel/art";
 import type { AgentId } from "../types";
@@ -9,6 +11,26 @@ import { AgentBubble, Button, IconButton, SectionTitle, SegBar } from "../ui/kit
 
 const AGENTS: readonly AgentId[] = ["chef", "nutritionist", "bargain_hunter"];
 const RESCUE_SEGMENTS = 10;
+
+const WORKING_LINES: Record<AgentId, string> = {
+  chef: "Chef is dreaming up recipes",
+  nutritionist: "Nutritionist is checking each dish",
+  bargain_hunter: "Shopper is pricing your list at nearby stores",
+};
+
+/** Seconds since the planning started, ticking while it runs. */
+function useElapsedSeconds(isRunning: boolean): number {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (!isRunning) {
+      return;
+    }
+    setSeconds(0);
+    const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [isRunning]);
+  return seconds;
+}
 
 const WAITING_LINES: Record<AgentId, string> = {
   chef: "Reading the stash for food to use first.",
@@ -42,6 +64,11 @@ export function Huddle({ raid, go, onRetry }: HuddleProps) {
   const isSettled = state.phase === "settled";
   const isFailed = state.phase === "failed";
   const planned = state.plan?.dishes.length ?? 0;
+  const isRunning = !isSettled && !isFailed;
+  const isLive = state.party === "gemini";
+  const waiting = waitingOn(state);
+  const active = state.speaker ?? waiting;
+  const elapsed = useElapsedSeconds(isRunning);
   const title = isSettled ? "The plan is ready" : isFailed ? "The huddle broke up" : "Your party is on it";
 
   return (
@@ -53,6 +80,20 @@ export function Huddle({ raid, go, onRetry }: HuddleProps) {
           <h1>{title}</h1>
         </div>
       </header>
+
+      {isRunning && (
+        <section className="working px-box" role="status">
+          <span className="working-dots" aria-hidden="true"><i /><i /><i /></span>
+          <div>
+            <strong>{`${WORKING_LINES[waiting ?? "chef"]} · ${elapsed}s`}</strong>
+            <small>
+              {isLive
+                ? "Live Gemini agents can take up to a minute. Skip below for an instant plan."
+                : "Almost there."}
+            </small>
+          </div>
+        </section>
+      )}
 
       <section className="rescue px-box px-peach">
         <div className="rescue-head">
@@ -69,11 +110,30 @@ export function Huddle({ raid, go, onRetry }: HuddleProps) {
 
       <div className="huddle-party" aria-live="polite">
         {AGENTS.map((agent) => (
-          <AgentBubble key={agent} agent={agent} isSpeaking={state.speaker === agent}>
+          <AgentBubble key={agent} agent={agent} isSpeaking={isRunning && active === agent}>
             {state.bubbles[agent] ?? WAITING_LINES[agent]}
+            {isRunning && waiting === agent && state.speaker === null && <span className="typing" aria-hidden="true"> ...</span>}
           </AgentBubble>
         ))}
       </div>
+
+      {state.quotes.length > 0 && (
+        <>
+          <SectionTitle title="Store check" aside="same list, every store" />
+          <ul className="quotes">
+            {state.quotes.map((quote) => (
+              <li key={quote.name} className={quote.chosen ? "quote is-chosen" : "quote"}>
+                <span className="pitch-text">
+                  <strong>{quote.name}</strong>
+                  <small>{`${quote.distance_mi} mi away · ${plural(quote.meals, "meal")}`}</small>
+                </span>
+                <b>{money(quote.total)}</b>
+                {quote.chosen && <span className="stamp stamp-ok">Best</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       {state.notes.map((note) => (
         <p className="fineprint" key={note}>{note}</p>
@@ -111,7 +171,11 @@ export function Huddle({ raid, go, onRetry }: HuddleProps) {
           </Button>
         )}
         {isFailed && <Button size="lg" isBlock onClick={onRetry}>Try the huddle again</Button>}
-        {!isSettled && !isFailed && <Button size="lg" tone="paper" isBlock onClick={raid.skip}>Skip to the plan</Button>}
+        {isRunning && (
+          <Button size="lg" tone="paper" isBlock onClick={raid.skip}>
+            {isLive && !state.plan ? "Skip · make a quick plan now" : "Skip to the plan"}
+          </Button>
+        )}
       </div>
     </div>
   );
