@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from app.agents.chef import avoided_in
+from app.agents.chef import RULE_DIETS, avoided_in, fits_diet
 from app.llm import LLM
 from app.schemas import Dish, Goals, ReviewDraft, Verdict
 
@@ -63,7 +63,11 @@ def _judge(dish: Dish, goals: Goals) -> Verdict:
     problems: list[str] = []
 
     # Dishes from the live Chef carry no diet tags, so the diet can only be judged when tags exist.
-    if goals.diet != "none" and dish.diets and goals.diet not in dish.diets:
+    if goals.diet in RULE_DIETS:
+        breaks_diet = not fits_diet(dish, goals.diet)
+    else:
+        breaks_diet = goals.diet != "none" and bool(dish.diets) and goals.diet not in dish.diets
+    if breaks_diet:
         score -= DIET_PENALTY
         veto = True
         problems.append(f"not {goals.diet}")

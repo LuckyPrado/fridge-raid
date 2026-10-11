@@ -7,14 +7,15 @@ import { AgentBubble, Button } from "../ui/kit";
 import { Room, Tower } from "../ui/Rooms";
 import { parseFavorites } from "./GoalSheets";
 
-const FAVORITE_IDEAS = ["tacos", "pasta", "eggs", "rice bowls", "curry", "chicken", "salad", "soup"] as const;
-const AVOID_IDEAS = ["mushrooms", "shrimp", "bacon", "tofu", "onion", "cilantro"] as const;
 const DIETS: ReadonlyArray<{ id: Diet; label: string }> = [
   { id: "none", label: "I eat everything" },
   { id: "vegetarian", label: "Vegetarian" },
   { id: "vegan", label: "Vegan" },
   { id: "pescatarian", label: "Pescatarian" },
+  { id: "kosher", label: "Kosher" },
+  { id: "halal", label: "Halal" },
 ];
+const STORES_NAMED = 3;
 const AIMS: ReadonlyArray<{ id: Aim; label: string }> = [
   { id: "lighter", label: "Eat a little lighter" },
   { id: "balanced", label: "Stay balanced" },
@@ -39,27 +40,27 @@ const STEPS: readonly Step[] = [
   { agent: "chef", line: () => "Welcome to my kitchen! I cook with what you already have. First, who am I cooking for, and what do you love?" },
   { agent: "chef", line: (name) => `Good taste${name ? `, ${name}` : ""}. Now the important part: anything I should never put on your plate?` },
   { agent: "nutritionist", line: (name) => `My turn${name ? `, ${name}` : ""}. Tell me a little about you and what we are working toward, and I will set your daily goals.` },
-  { agent: "bargain_hunter", line: () => "And I watch the wallet. How much can we spend on groceries each week, and how many dinners should we plan?" },
+  { agent: "bargain_hunter", line: () => "And I watch the wallet. First, where are you? I will find the grocery stores around you. Then tell me the budget and how many dinners to plan." },
   { agent: null, line: () => "" },
 ];
 
 type SetupProps = {
   profile: Profile;
+  /** Names of real stores found near the player, once they share a location. */
+  nearbyStores: readonly string[];
+  /** Ask the phone for its location and find stores. Resolves to a problem message, or null. */
+  onLocate: () => Promise<string | null>;
   onFinish: (profile: Profile) => Promise<boolean>;
 };
 
-function toggled(list: readonly string[], item: string): string[] {
-  return list.includes(item) ? list.filter((entry) => entry !== item) : [...list, item];
-}
-
 /** First run: the three agents introduce themselves and take turns asking what the player wants. */
-export function Setup({ profile, onFinish }: SetupProps) {
+export function Setup({ profile, nearbyStores, onLocate, onFinish }: SetupProps) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState(profile.name);
-  const [favorites, setFavorites] = useState<string[]>(profile.goals.favorites);
-  const [moreFavorites, setMoreFavorites] = useState("");
-  const [avoid, setAvoid] = useState<string[]>(profile.goals.avoid);
-  const [moreAvoid, setMoreAvoid] = useState("");
+  const [favoritesText, setFavoritesText] = useState(profile.goals.favorites.join(", "));
+  const [avoidText, setAvoidText] = useState(profile.goals.avoid.join(", "));
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationProblem, setLocationProblem] = useState<string | null>(null);
   const [diet, setDiet] = useState<Diet>(profile.goals.diet);
   const [sex, setSex] = useState<Sex>("other");
   const [feet, setFeet] = useState("5");
@@ -75,8 +76,15 @@ export function Setup({ profile, onFinish }: SetupProps) {
   const chosen = dailyTargets(sex, cm, aim);
   const budget = Math.round(boundedNumber(budgetText, BUDGET_LIMITS.min, BUDGET_LIMITS.max, BUDGET_LIMITS.fallback) * 100) / 100;
   const meals = Math.round(boundedNumber(mealsText, DINNER_LIMITS.min, DINNER_LIMITS.max, DINNER_LIMITS.fallback));
-  const allFavorites = parseFavorites([...favorites, moreFavorites].join(","));
-  const allAvoid = parseFavorites([...avoid, moreAvoid].join(","), MAX_AVOID);
+  const allFavorites = parseFavorites(favoritesText);
+  const allAvoid = parseFavorites(avoidText, MAX_AVOID);
+
+  const handleLocate = async () => {
+    setIsLocating(true);
+    setLocationProblem(null);
+    setLocationProblem(await onLocate());
+    setIsLocating(false);
+  };
   const isLast = step === STEPS.length - 1;
 
   const handleFinish = async () => {
@@ -134,15 +142,9 @@ export function Setup({ profile, onFinish }: SetupProps) {
             <input id="setup-name" className="setup-input" value={name} maxLength={24} placeholder="Alex" autoComplete="given-name" onChange={(event) => setName(event.target.value)} />
           </div>
           <div className="setup-question">
-            <h2>Foods you love</h2>
-            <div className="choice-row" role="group" aria-label="Foods you love">
-              {FAVORITE_IDEAS.map((food) => (
-                <button type="button" key={food} className={`choice ${favorites.includes(food) ? "is-picked" : ""}`} aria-pressed={favorites.includes(food)} onClick={() => setFavorites(toggled(favorites, food))}>
-                  {capitalize(food)}
-                </button>
-              ))}
-            </div>
-            <input className="setup-input" aria-label="Other foods you love" value={moreFavorites} placeholder="Anything else? Separate with commas" onChange={(event) => setMoreFavorites(event.target.value)} />
+            <h2><label htmlFor="setup-favorites">Foods you love</label></h2>
+            <input id="setup-favorites" className="setup-input" value={favoritesText} placeholder="tacos, pasta, curry" autoComplete="off" onChange={(event) => setFavoritesText(event.target.value)} />
+            <p className="fineprint">Separate them with commas. I will tell you when a recipe is here because of one.</p>
           </div>
         </>
       )}
@@ -150,15 +152,9 @@ export function Setup({ profile, onFinish }: SetupProps) {
       {step === 2 && (
         <>
           <div className="setup-question">
-            <h2>Foods to avoid</h2>
-            <div className="choice-row" role="group" aria-label="Foods to avoid">
-              {AVOID_IDEAS.map((food) => (
-                <button type="button" key={food} className={`choice ${avoid.includes(food) ? "is-picked" : ""}`} aria-pressed={avoid.includes(food)} onClick={() => setAvoid(toggled(avoid, food))}>
-                  {capitalize(food)}
-                </button>
-              ))}
-            </div>
-            <input className="setup-input" aria-label="Other foods to avoid" value={moreAvoid} placeholder="Dislikes or allergies, separated with commas" onChange={(event) => setMoreAvoid(event.target.value)} />
+            <h2><label htmlFor="setup-avoid">Foods to avoid</label></h2>
+            <input id="setup-avoid" className="setup-input" value={avoidText} placeholder="mushrooms, shrimp" autoComplete="off" onChange={(event) => setAvoidText(event.target.value)} />
+            <p className="fineprint">Dislikes or allergies, separated with commas. No recipe will use them.</p>
           </div>
           <div className="setup-question">
             <h2>How you eat</h2>
@@ -169,6 +165,7 @@ export function Setup({ profile, onFinish }: SetupProps) {
                 </button>
               ))}
             </div>
+            <p className="fineprint">Kosher and halal are checked by ingredient only. Look for certification on the package.</p>
           </div>
         </>
       )}
@@ -215,6 +212,21 @@ export function Setup({ profile, onFinish }: SetupProps) {
 
       {step === 4 && (
         <div className="setup-question">
+          <h2>Stores near you</h2>
+          {nearbyStores.length > 0 ? (
+            <section className="target px-box px-butter" aria-live="polite">
+              <strong>{`${nearbyStores.length} stores found`}</strong>
+              <small>{`${nearbyStores.slice(0, STORES_NAMED).join(", ")}${nearbyStores.length > STORES_NAMED ? " and more" : ""}. I will price your list at each one.`}</small>
+            </section>
+          ) : (
+            <>
+              <Button tone="butter" icon="pin" isBlock disabled={isLocating} onClick={handleLocate}>
+                {isLocating ? "Finding stores near you" : "Use my location"}
+              </Button>
+              <p className="fineprint">Skip this and I will use sample stores. You can share your location later on the Shop tab.</p>
+            </>
+          )}
+          {locationProblem && <p className="scan-problem scan-problem-light" role="alert">{locationProblem}</p>}
           <div className="number-row">
             <label className="number-field">
               <span>Weekly budget, $</span>

@@ -155,7 +155,12 @@ export function App() {
           </div>
         )}
         <main>
-          <Setup profile={kitchen.profile} onFinish={handleFinish} />
+          <Setup
+            profile={kitchen.profile}
+            nearbyStores={kitchen.origin ? kitchen.stores.map((entry) => entry.store.name) : []}
+            onLocate={kitchen.shareLocation}
+            onFinish={handleFinish}
+          />
         </main>
       </div>
     );

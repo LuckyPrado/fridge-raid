@@ -17,9 +17,9 @@ const OPENERS: Record<AgentId, string> = {
 };
 
 const SUGGESTIONS: Record<AgentId, readonly string[]> = {
-  chef: ["What should I cook tonight?", "What should I use first?", "I love tacos and pasta", "I don't eat mushrooms"],
-  nutritionist: ["How am I doing today?", "I want 120 g of protein a day", "Set my day to 2200 calories"],
-  bargain_hunter: ["How much is milk?", "Add eggs to my grocery list", "What is my budget right now?", "Make my budget $40"],
+  chef: ["What should I cook tonight?", "Give me a different recipe", "What should I use first?", "I don't eat mushrooms"],
+  nutritionist: ["How am I doing today?", "I drank a glass of water", "I want 120 g of protein a day"],
+  bargain_hunter: ["How much is milk?", "Add eggs to my grocery list", "Remove eggs from my list", "Make my budget $40"],
 };
 
 type ChatProps = {

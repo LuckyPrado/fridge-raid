@@ -310,9 +310,12 @@ export function useKitchen(): Kitchen {
     try {
       const reply = await api.chat(agent, message, today);
       setProfile(reply.profile);
-      await refresh(() => api.grocery(), setGrocery);
       if (reply.changes.length > 0) {
-        await refresh(() => api.day(today), setDay);
+        await Promise.all([
+          refresh(() => api.grocery(), setGrocery),
+          refresh(() => api.day(today), setDay),
+          refresh(() => api.plan(), setSaved),
+        ]);
       }
       return reply;
     } catch (error: unknown) {

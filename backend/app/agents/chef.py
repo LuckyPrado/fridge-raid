@@ -52,6 +52,41 @@ def _goal_lines(ctx: RaidContext) -> str:
     )
 
 
+PORK = frozenset({"bacon", "sausage", "ham", "pork", "prosciutto", "pepperoni", "salami", "chorizo"})
+SHELLFISH = frozenset({"shrimp", "crab", "lobster", "clam", "mussel", "oyster", "scallop", "prawn"})
+MEAT = PORK | frozenset({"chicken", "beef", "turkey", "lamb", "steak", "veal", "duck"})
+DAIRY = frozenset({"milk", "cheese", "cheddar", "mozzarella", "parmesan", "feta", "butter", "cream", "yogurt"})
+ALCOHOL = frozenset({"wine", "beer", "rum", "vodka", "mirin", "sake", "bourbon"})
+# Words that turn a dairy-sounding name into something else: coconut milk, peanut butter.
+NOT_DAIRY = frozenset({"coconut", "peanut", "almond", "oat", "soy"})
+# Diets judged from ingredients. The other diets rely on each recipe's own tags.
+RULE_DIETS = frozenset({"kosher", "halal"})
+
+
+def _ingredient_words(dish: Dish) -> list[set[str]]:
+    return [set(normalize_name(ingredient.name).split()) for ingredient in dish.ingredients]
+
+
+def fits_diet(dish: Dish, diet: str) -> bool:
+    """Whether a dish suits a diet.
+
+    Kosher and halal are checked by ingredient only: no pork or alcohol for halal, and no pork,
+    shellfish, or meat with dairy for kosher. This cannot confirm certification or preparation.
+    """
+    if diet == "none":
+        return True
+    if diet not in RULE_DIETS:
+        return diet in dish.diets
+    words = _ingredient_words(dish)
+    has = lambda group: any(entry & group for entry in words)  # noqa: E731
+    if has(PORK):
+        return False
+    if diet == "halal":
+        return not has(ALCOHOL)
+    has_dairy = any(entry & DAIRY and not entry & NOT_DAIRY for entry in words)
+    return not has(SHELLFISH) and not (has(MEAT) and has_dairy)
+
+
 def avoided_in(dish: Dish, avoid: Sequence[str]) -> tuple[str, ...]:
     """The avoided foods that a dish contains, matched on ingredient names."""
     unwanted = {normalize_name(food) for food in avoid} - {""}
@@ -154,7 +189,7 @@ class OfflineChef:
             recipe
             for recipe in self._recipes
             if recipe.name.lower() not in taken
-            and (diet == "none" or diet in recipe.diets)
+            and fits_diet(recipe, diet)
             and not avoided_in(recipe, ctx.goals.avoid)
         ]
         return sorted(eligible, key=lambda recipe: self._score(recipe, ctx), reverse=True)

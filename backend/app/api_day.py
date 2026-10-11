@@ -10,12 +10,15 @@ from pydantic import BaseModel
 
 from app import demo, grocery, tracker
 from app.chat import ChatFacts, converse_full
+from app.catalog import normalize_name
 from app.optimizer import at_risk_items
+from app.replan import swap_next_dish
 from app.api import WRITE_REQUESTS_PER_MINUTE, Envelope
 from app.deals import store_deals
 from app.places import PlacesError, find_stores
 from app.ratelimit import rate_limit
 from app.schemas import (
+    MAX_WATER_GLASSES,
     ChatReply,
     ChatRequest,
     CookRequest,
@@ -226,6 +229,21 @@ def _add_to_grocery(services: Services, names: list[str]) -> list[str]:
     return lines
 
 
+def _remove_from_grocery(services: Services, names: list[str]) -> list[str]:
+    current = grocery.load_list(services.repository)
+    unwanted = {normalize_name(name) for name in names}
+    kept = tuple(item for item in current.items if normalize_name(item.name) not in unwanted)
+    if len(kept) == len(current.items):
+        return []
+    grocery.save_list(services.repository, GroceryList(items=kept))
+    return [f"Off your list: {item.name}" for item in current.items if item not in kept]
+
+
+def _add_water(services: Services, day: str, glasses: int) -> int:
+    current = tracker.day_summary(services.repository, day).water
+    return tracker.set_water(services.repository, day, min(MAX_WATER_GLASSES, current + glasses)).water
+
+
 @router.post(
     "/chat",
     response_model=Envelope[ChatReply],
@@ -246,11 +264,24 @@ async def chat(
     reply = outcome.reply
     if outcome.grocery and not added:
         reply = f"{reply} That is already on your list."
-    return Envelope(
-        data=ChatReply(
-            agent=request.agent, reply=reply, profile=outcome.profile, changes=(*outcome.changes, *added)
+    done = [*outcome.changes, *added]
+    if outcome.ungrocery:
+        done += await asyncio.to_thread(_remove_from_grocery, services, outcome.ungrocery)
+    if outcome.swap_recipe:
+        stores = await asyncio.to_thread(tracker.active_stores, services.repository, services.stores)
+        swap = await swap_next_dish(
+            services.repository, services.catalog, stores, services.party_for(is_demo), services.offline_party,
+            outcome.profile.goals,
         )
-    )
+        if swap is None:
+            reply = "There is no planned dinner to swap, or I am out of ideas that fit your goals."
+        else:
+            reply = f"{reply} How about {swap.added}?" if not is_demo and services.llm else f"Out goes {swap.removed}. How about {swap.added}?"
+            done.append(f"New recipe: {swap.added}")
+    if outcome.water and day:
+        summary = await asyncio.to_thread(_add_water, services, day, outcome.water)
+        done.append(f"Water: {summary} glasses today")
+    return Envelope(data=ChatReply(agent=request.agent, reply=reply, profile=outcome.profile, changes=tuple(done)))
 
 
 @router.post("/quote", response_model=Envelope[list[Quote]])

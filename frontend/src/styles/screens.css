@@ -1337,3 +1337,28 @@
   border-radius: 0;
   background: var(--paper);
 }
+
+/* --- Why a recipe was suggested --- */
+
+.why-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.why {
+  justify-self: start;
+  padding: 1px var(--space-2);
+  background: var(--butter);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  line-height: 1.25;
+  box-shadow: 0 0 0 2px var(--butter-deep);
+}
+
+.why-box {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}

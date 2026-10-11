@@ -14,6 +14,7 @@ import {
   normalizeName,
   readiness,
   savingPercent,
+  whySuggested,
 } from "./plan";
 
 const item = (name: string, quantity: number, daysLeft: number): InventoryItem => ({
@@ -152,5 +153,31 @@ describe("plan helpers", () => {
       filledSegments(250, 100, 10),
       filledSegments(5, 0, 10),
     ]).toEqual([0, 1, 5, 10, 0]);
+  });
+});
+
+describe("whySuggested", () => {
+  const goals = {
+    budget: 25, diet: "halal" as const, max_calories: 800, max_sodium_mg: 900, min_protein_g: 15, meals: 4,
+    favorites: ["Tacos", "eggs", "sushi"], avoid: ["mushrooms"], daily_calories: 1800, daily_protein_g: 100,
+  };
+
+  it("names the favorite, the expiring food, the diet and the avoided food behind a recipe", () => {
+    const tacos = dish("d1", "Spinach Egg Tacos", { spinach: 1, egg: 2 });
+    const inventory = [item("spinach", 2, 1), item("egg", 6, 9)];
+
+    expect(whySuggested(tacos, inventory, goals)).toEqual([
+      "You love Tacos",
+      "You love eggs",
+      "Uses your spinach before it spoils",
+      "Fits halal",
+      "No mushrooms",
+    ]);
+  });
+
+  it("gives no reasons when nothing personal applies", () => {
+    const plain = { ...goals, diet: "none" as const, favorites: [], avoid: [] };
+
+    expect(whySuggested(dish("d2", "Rice Bowl", { rice: 1 }), [item("rice", 3, 300)], plain)).toEqual([]);
   });
 });

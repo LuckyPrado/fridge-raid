@@ -4,7 +4,7 @@ import { capitalize } from "../lib/food";
 import type { DemoState, Diet, FoodLogInput, MealEstimate, Profile } from "../types";
 import { Button, Field, Sheet } from "../ui/kit";
 
-const DIETS: readonly Diet[] = ["none", "vegetarian", "vegan", "pescatarian"];
+const DIETS: readonly Diet[] = ["none", "vegetarian", "vegan", "pescatarian", "kosher", "halal"];
 const MAX_FAVORITES = 8;
 const MAX_AVOID = 12;
 const MAX_FAVORITE_CHARS = 30;

@@ -31,7 +31,7 @@ def _draft(**changes: Any) -> ChatDraft:
         "reply": "Done.", "name": "", "diet": "", "budget": NO_CHANGE, "meals": NO_CHANGE,
         "daily_calories": NO_CHANGE, "daily_protein_g": NO_CHANGE, "max_calories": NO_CHANGE,
         "max_sodium_mg": NO_CHANGE, "add_favorites": [], "remove_favorites": [], "add_avoid": [], "remove_avoid": [],
-        "add_to_grocery": [],
+        "add_to_grocery": [], "remove_from_grocery": [], "swap_recipe": False, "add_water": 0,
     }
     return ChatDraft(**{**fields, **changes})
 

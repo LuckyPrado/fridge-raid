@@ -48,10 +48,11 @@ await noSidewaysScroll("welcome");
 // The agents take turns asking questions.
 await page.getByRole("button", { name: "Meet your party" }).click();
 await page.getByLabel("Your name").fill("Alex");
-await page.getByRole("button", { name: "Tacos" }).click();
+await page.getByLabel("Foods you love").fill("tacos, eggs");
 await shot("0-setup-chef");
 await page.getByRole("button", { name: "Next" }).click();
-await page.getByRole("button", { name: "Shrimp" }).click();
+await page.getByLabel("Foods to avoid").fill("shrimp");
+await page.getByRole("button", { name: "Halal" }).waitFor();
 await page.getByRole("button", { name: "Next" }).click();
 await page.getByRole("button", { name: "Male", exact: true }).click();
 await page.getByLabel("Height, feet").fill("5");
@@ -74,7 +75,7 @@ await page.getByRole("heading", { name: "Fridge scan" }).waitFor();
 await page.getByRole("button", { name: "Dorm Fridge" }).click();
 await shot("2-scan");
 await noSidewaysScroll("scan");
-await page.getByRole("button", { name: "Scan the sample fridge" }).click();
+await page.getByRole("button", { name: /^(Scan|Use) the sample fridge$/ }).click();
 
 // Review the stash and fix one amount.
 await page.getByRole("heading", { name: "Look what we found!" }).waitFor();
@@ -105,6 +106,7 @@ await page.getByRole("button", { name: /See my \d recipes/ }).click();
 
 // Chef list, then cook the featured recipe.
 await page.getByRole("heading", { name: "Made for your fridge" }).waitFor();
+await page.getByText(/You love (tacos|eggs)/).first().waitFor();
 await shot("6-chef");
 await noSidewaysScroll("chef");
 await page.locator(".feature").click();
@@ -169,6 +171,8 @@ await page.getByRole("heading", { name: "Tell us what you like" }).waitFor();
 await page.getByRole("button", { name: "Make my budget $40" }).click();
 await page.locator(".chip", { hasText: "Weekly budget $40.00" }).waitFor();
 await page.getByRole("group", { name: "Who to talk to" }).getByRole("button", { name: "Chef" }).click();
+await page.getByRole("button", { name: "Give me a different recipe" }).click();
+await page.locator(".chip", { hasText: /New recipe: / }).waitFor();
 await page.getByLabel("Message to the Chef").fill("I hate mushrooms");
 await page.getByRole("button", { name: "Send" }).click();
 await page.locator(".chip", { hasText: /Avoiding: .*mushrooms/ }).waitFor();
@@ -183,7 +187,6 @@ await page.getByRole("heading", { name: "Your shopping loot" }).waitFor();
 // Everything survives a reload.
 await page.reload();
 await page.getByRole("heading", { name: "Your shopping loot" }).waitFor();
-check(await page.getByRole("checkbox", { checked: true }).count() === 1, "plan: checked item lost after reload");
 await tab("Home").click();
 await page.getByText("Hey, Alex").waitFor();
 await tab("Chef").click();

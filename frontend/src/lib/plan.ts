@@ -1,4 +1,4 @@
-import type { CartLine, Dish, Ingredient, InventoryItem, SavedPlan } from "../types";
+import type { CartLine, Dish, Goals, Ingredient, InventoryItem, SavedPlan } from "../types";
 import { isAtRisk } from "./food";
 
 // Mirrors the server's catalog matching closely enough to line recipes up with the fridge.
@@ -134,4 +134,33 @@ export function filledSegments(value: number, max: number, segments: number): nu
     return 0;
   }
   return Math.min(segments, Math.max(1, Math.round((value / max) * segments)));
+}
+
+const REASONS_SHOWN = 2;
+
+/** The favorite foods a dish delivers on: named in its title or among its ingredients. */
+export function favoritesIn(dish: Dish, favorites: readonly string[]): string[] {
+  const title = normalizeName(dish.name);
+  const titleWords = new Set(title.split(" "));
+  const ingredients = new Set(dish.ingredients.map((ingredient) => normalizeName(ingredient.name)));
+  return favorites.filter((favorite) => {
+    const key = normalizeName(favorite);
+    return key !== "" && (titleWords.has(key) || ingredients.has(key) || title.includes(key));
+  });
+}
+
+/** Plain reasons the Chef picked a dish, most personal first: your favorites, your expiring food, your diet. */
+export function whySuggested(dish: Dish, inventory: readonly InventoryItem[], goals: Goals): string[] {
+  const reasons = favoritesIn(dish, goals.favorites).map((favorite) => `You love ${favorite}`);
+  const useSoon = readiness(checkIngredients(dish, inventory)).useSoon.slice(0, REASONS_SHOWN);
+  if (useSoon.length > 0) {
+    reasons.push(`Uses your ${useSoon.join(" and ")} before it spoils`);
+  }
+  if (goals.diet !== "none") {
+    reasons.push(`Fits ${goals.diet}`);
+  }
+  if (goals.avoid.length > 0) {
+    reasons.push(`No ${goals.avoid.slice(0, REASONS_SHOWN).join(" or ")}`);
+  }
+  return reasons;
 }

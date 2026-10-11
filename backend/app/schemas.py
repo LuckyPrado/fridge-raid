@@ -12,7 +12,7 @@ Category = Literal[
 CATEGORIES: tuple[str, ...] = (
     "produce", "dairy", "protein", "grain", "pantry", "condiment", "frozen", "beverage", "leftover", "other"
 )
-Diet = Literal["none", "vegetarian", "vegan", "pescatarian"]
+Diet = Literal["none", "vegetarian", "vegan", "pescatarian", "kosher", "halal"]
 
 MAX_INVENTORY_ITEMS = 200
 MAX_STEPS = 8
@@ -374,6 +374,11 @@ class ChatDraft(BaseModel):
     remove_avoid: list[str]
     # Items the player asked to put on their grocery list.
     add_to_grocery: list[str]
+    remove_from_grocery: list[str]
+    # True when the player wants a different recipe than the next planned one.
+    swap_recipe: bool
+    # Glasses of water the player says they just drank.
+    add_water: int
 
 
 class VerdictDraft(BaseModel):

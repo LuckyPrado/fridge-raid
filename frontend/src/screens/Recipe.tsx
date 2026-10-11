@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { Kitchen } from "../hooks/useKitchen";
 import { api } from "../lib/api";
 import { amountLabel, capitalize, money, packLabel, plural } from "../lib/food";
-import { cartLineFor, checkIngredients, dishesUsing, readiness, type IngredientCheck } from "../lib/plan";
+import { cartLineFor, checkIngredients, dishesUsing, readiness, whySuggested, type IngredientCheck } from "../lib/plan";
 import type { Go } from "../nav";
 import type { CartLine, Dish, Quote } from "../types";
 import { AgentBubble, Button, Chip, Icon, ScreenHeader, SectionTitle } from "../ui/kit";
@@ -143,6 +143,16 @@ export function Recipe({ kitchen, dishId, go, notify }: RecipeProps) {
       )}
       <h2 className="recipe-name">{dish.name}</h2>
       <p className="recipe-about">{dish.description || dish.pitch}</p>
+      {!isCooked && whySuggested(dish, inventory, profile.goals).length > 0 && (
+        <section className="why-box px-box px-peach">
+          <p className="eyebrow">Why the Chef picked this</p>
+          <span className="why-row">
+            {whySuggested(dish, inventory, profile.goals).map((reason) => (
+              <span key={reason} className="why">{reason}</span>
+            ))}
+          </span>
+        </section>
+      )}
       <div className="chip-row">
         <Chip tone="paper">{`${dish.minutes} min`}</Chip>
         <Chip tone="paper">{`${dish.calories} kcal`}</Chip>

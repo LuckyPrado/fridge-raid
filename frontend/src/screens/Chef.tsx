@@ -1,6 +1,6 @@
 import type { Kitchen } from "../hooks/useKitchen";
 import { capitalize, dishSprite, plural } from "../lib/food";
-import { checkIngredients, readiness } from "../lib/plan";
+import { checkIngredients, readiness, whySuggested } from "../lib/plan";
 import type { Go } from "../nav";
 import { PixelEmoji } from "../pixel/PixelEmoji";
 import type { Dish } from "../types";
@@ -96,6 +96,11 @@ export function Chef({ kitchen, go, onPlan }: ChefProps) {
           <strong>{featured.name}</strong>
           <small>{`${featured.minutes} min · ${featured.protein_g} g protein · ${featured.calories} kcal`}</small>
           <em>{isFeaturedCooked ? "Cooked and logged" : readyLine(featuredReady.ready, featuredReady.total, featuredReady.toBuy.length)}</em>
+          <span className="why-row">
+            {whySuggested(featured, inventory, goals).map((reason) => (
+              <span key={reason} className="why">{reason}</span>
+            ))}
+          </span>
         </span>
       </button>
 
@@ -111,6 +116,9 @@ export function Chef({ kitchen, go, onPlan }: ChefProps) {
                   <strong>{dish.name}</strong>
                   <small>{`${dish.minutes} min · ${dish.protein_g} g protein`}</small>
                   <em>{isCooked ? "Cooked and logged" : readyLine(ready.ready, ready.total, ready.toBuy.length)}</em>
+                  {whySuggested(dish, inventory, goals).slice(0, 1).map((reason) => (
+                    <span key={reason} className="why">{reason}</span>
+                  ))}
                 </span>
                 <Icon name="next" scale={1.5} />
               </button>

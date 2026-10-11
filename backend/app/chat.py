@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Iterable, Literal, get_args
 
 from app.catalog import normalize_name
@@ -22,6 +22,7 @@ AgentName = Literal["chef", "nutritionist", "bargain_hunter"]
 NO_CHANGE = -1
 MAX_REPLY_CHARS = 400
 MAX_FOOD_CHARS = 30
+MAX_WATER_PER_MESSAGE = 8
 DIETS: tuple[str, ...] = get_args(Diet)
 
 PERSONAS: dict[str, str] = {
@@ -38,12 +39,15 @@ Read the player's message, update their preferences when they ask for a change, 
 Rules for the fields you return:
 - "reply": at most 2 short sentences, in character. Say what you changed, or answer the question. No medical advice.
 - Number fields: use {NO_CHANGE} when the player did not ask to change that value.
-- "diet": one of none, vegetarian, vegan, pescatarian, or an empty string for no change.
+- "diet": one of none, vegetarian, vegan, pescatarian, kosher, halal, or an empty string for no change.
 - "name": the player's first name if they just told you it, otherwise an empty string.
 - "add_favorites" and "add_avoid": short lowercase food names, singular, only ones the player named.
 - "remove_favorites" and "remove_avoid": foods the player wants taken off those lists.
 - A food the player dislikes, cannot eat, or is allergic to goes in "add_avoid".
 - "add_to_grocery": foods the player asked you to put on their grocery or shopping list. Otherwise empty.
+- "remove_from_grocery": foods the player asked you to take off that list. Otherwise empty.
+- "swap_recipe": true only when the player asks for a different recipe than the next planned dinner.
+- "add_water": glasses of water the player says they just drank, otherwise 0.
 - Change only what the player asked for. Never invent preferences."""
 
 
@@ -137,6 +141,7 @@ def _blank_draft() -> ChatDraft:
         reply="", name="", diet="", budget=NO_CHANGE, meals=NO_CHANGE, daily_calories=NO_CHANGE,
         daily_protein_g=NO_CHANGE, max_calories=NO_CHANGE, max_sodium_mg=NO_CHANGE,
         add_favorites=[], remove_favorites=[], add_avoid=[], remove_avoid=[], add_to_grocery=[],
+        remove_from_grocery=[], swap_recipe=False, add_water=0,
     )
 
 
@@ -144,6 +149,13 @@ _FOOD_LIST = r"([a-z][a-z ,&]*?)(?:[.!?;]|$| and i | i | but | because | so | pl
 _AVOID = re.compile(r"(?:hate|dislike|allergic to|avoid|can(?:no|')t eat|don'?t (?:like|eat|want)|no more|\bno)\s+" + _FOOD_LIST)
 _LIKE = re.compile(r"(?:love|like|favorite (?:food )?(?:is|are)|enjoy|crave|more)\s+" + _FOOD_LIST)
 _NUMBER = r"\$?\s*(\d+(?:\.\d+)?)"
+_UNGROCERY = re.compile(r"(?:remove|take|delete)\s+(.+?)\s+(?:from|off)\s+(?:my |the )?(?:grocery |shopping )?list")
+_SWAP = re.compile(
+    r"(?:different|another|new|other|swap|change|replace)\b.{0,30}\b(?:recipe|dish|meal|dinner|idea)|something else|"
+    r"(?:don'?t|do not) (?:like|want) (?:that|this|it)"
+)
+_WATER = re.compile(r"(?:drank|had|log|add)\s+(\d+|a|an|one|two|three|four)?\s*(?:more )?(?:glass(?:es)?|cups?)(?: of water)?|drank water")
+WATER_WORDS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4}
 _GROCERY = re.compile(r"(?:add|put)\s+(.+?)\s+(?:to|on)\s+(?:my |the )?(?:grocery |shopping )?list")
 
 
@@ -167,12 +179,23 @@ def offline_draft(message: str) -> ChatDraft:
     draft.daily_protein_g = int(_first_number(r"(\d+)\s*(?:g|grams?)?\s*(?:of )?protein", text))
     draft.daily_calories = int(_first_number(r"(\d{3,4})\s*(?:k?cal|calories)", text))
     draft.meals = int(_first_number(r"(\d)\s*(?:dinners|meals)", text))
-    for diet in ("vegetarian", "vegan", "pescatarian"):
+    for diet in ("vegetarian", "vegan", "pescatarian", "kosher", "halal"):
         if diet in text:
             draft.diet = "none" if re.search(rf"(?:not|no longer|stop being) {diet}", text) else diet
+    unlisted = _UNGROCERY.search(text)
+    if unlisted:
+        draft.remove_from_grocery = _split_foods(unlisted.group(1))
+        return draft
     listed = _GROCERY.search(text)
     if listed:
         draft.add_to_grocery = _split_foods(listed.group(1))
+        return draft
+    if _SWAP.search(text):
+        draft.swap_recipe = True
+        return draft
+    drank = _WATER.search(text)
+    if drank:
+        draft.add_water = WATER_WORDS.get(drank.group(1) or "a", 1) if not (drank.group(1) or "").isdigit() else int(drank.group(1))
         return draft
     avoid_matches = list(_AVOID.finditer(text))
     draft.add_avoid = [food for match in avoid_matches for food in _split_foods(match.group(1))]
@@ -203,13 +226,16 @@ class ChatOutcome:
     profile: Profile
     changes: list[str]
     grocery: list[str]
+    ungrocery: list[str] = field(default_factory=list)
+    swap_recipe: bool = False
+    water: int = 0
 
 
 HELP_LINES: dict[str, str] = {
-    "chef": "I did not catch that. Ask me what to cook tonight or what to use first, "
+    "chef": "I did not catch that. Ask me what to cook tonight, ask for a different recipe, "
     "or tell me foods you love or will not eat.",
-    "nutritionist": "I did not catch that. Ask how your day is going, or set a goal like 120 g of protein "
-    "or 2000 calories.",
+    "nutritionist": "I did not catch that. Ask how your day is going, tell me you drank a glass of water, "
+    "or set a goal like 120 g of protein.",
     "bargain_hunter": "I did not catch that. Ask what milk costs, tell me to add eggs to your list, "
     "or set a budget like $40.",
 }
@@ -293,11 +319,22 @@ def _offline_outcome(agent: str, message: str, profile: Profile, facts: ChatFact
     draft = offline_draft(message)
     updated, changes = apply_draft(profile, draft)
     grocery = _foods(draft.add_to_grocery)
-    if changes or grocery:
-        reply = offline_reply(changes, agent) if changes else "On it."
+    ungrocery = _foods(draft.remove_from_grocery)
+    water = max(0, min(MAX_WATER_PER_MESSAGE, draft.add_water))
+    if changes:
+        reply = offline_reply(changes, agent)
+    elif grocery or ungrocery:
+        reply = "On it."
+    elif draft.swap_recipe:
+        reply = "Fine, fine! Let me think of something else."
+    elif water:
+        reply = "Good. Water counts."
     else:
         reply = offline_answer(agent, message, facts, profile.goals) or HELP_LINES[agent]
-    return ChatOutcome(reply=reply, profile=updated, changes=changes, grocery=grocery)
+    return ChatOutcome(
+        reply=reply, profile=updated, changes=changes, grocery=grocery,
+        ungrocery=ungrocery, swap_recipe=draft.swap_recipe, water=water,
+    )
 
 
 async def converse_full(
@@ -324,7 +361,11 @@ async def converse_full(
         return _offline_outcome(agent, message, profile, facts)
     updated, changes = apply_draft(profile, draft)
     reply = " ".join(draft.reply.split())[:MAX_REPLY_CHARS] or offline_reply(changes, agent)
-    return ChatOutcome(reply=reply, profile=updated, changes=changes, grocery=_foods(draft.add_to_grocery))
+    return ChatOutcome(
+        reply=reply, profile=updated, changes=changes, grocery=_foods(draft.add_to_grocery),
+        ungrocery=_foods(draft.remove_from_grocery), swap_recipe=draft.swap_recipe,
+        water=max(0, min(MAX_WATER_PER_MESSAGE, draft.add_water)),
+    )
 
 
 async def converse(llm: LLM | None, agent: str, message: str, profile: Profile) -> tuple[str, Profile, list[str]]:

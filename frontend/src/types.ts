@@ -12,7 +12,7 @@ export const CATEGORIES = [
 ] as const;
 
 export type Category = (typeof CATEGORIES)[number];
-export type Diet = "none" | "vegetarian" | "vegan" | "pescatarian";
+export type Diet = "none" | "vegetarian" | "vegan" | "pescatarian" | "kosher" | "halal";
 export type AgentId = "chef" | "nutritionist" | "bargain_hunter";
 
 export interface InventoryItem {
