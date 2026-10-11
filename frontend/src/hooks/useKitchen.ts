@@ -97,7 +97,7 @@ function currentPosition(): Promise<Origin> {
         reject(
           new Error(
             error.code === error.PERMISSION_DENIED
-              ? "Location is turned off for this site. Allow it in your browser settings and try again."
+              ? "Location is blocked for this site. On iPhone: Settings, Privacy & Security, Location Services, Safari Websites, then choose While Using the App. Reload and try again."
               : "Your phone could not find its location. Try again near a window.",
           ),
         ),
