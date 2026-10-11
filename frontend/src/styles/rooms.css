@@ -371,3 +371,94 @@
   padding-top: var(--space-4);
   box-shadow: 0 calc(-1 * var(--px)) 0 0 var(--line);
 }
+
+.number-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+.number-field {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: var(--title-md);
+  line-height: 1.05;
+}
+
+.number-field small {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.target {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+}
+
+.target strong {
+  font-family: var(--font-title);
+  font-size: var(--title-lg);
+  font-weight: 400;
+  line-height: 1;
+}
+
+.target small {
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+/* --- The fridge photo with a box around each item found --- */
+
+.scan-photo {
+  position: relative;
+  margin: 0;
+  line-height: 0;
+}
+
+.scan-photo img {
+  width: 100%;
+  height: auto;
+}
+
+.scan-photo figcaption {
+  padding: var(--space-2) var(--space-3);
+  background: var(--ink);
+  color: var(--cream);
+  font-family: var(--font-display);
+  font-size: var(--label);
+  line-height: 1.2;
+}
+
+.found-box {
+  position: absolute;
+  border: var(--px) solid var(--gold);
+  box-shadow: 0 0 0 1px var(--ink), inset 0 0 0 1px var(--ink);
+  animation: found-pop 320ms steps(4) both;
+}
+
+.found-box b {
+  position: absolute;
+  top: calc(-1 * var(--px));
+  left: calc(-1 * var(--px));
+  max-width: 9rem;
+  overflow: hidden;
+  padding: 0 var(--space-1);
+  background: var(--gold);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes found-pop {
+  from {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}

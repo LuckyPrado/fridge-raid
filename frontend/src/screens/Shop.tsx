@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState, type FormEvent } from "react";
 
 import type { Kitchen } from "../hooks/useKitchen";
 import { capitalize, money, packLabel, plural, spriteForName } from "../lib/food";
@@ -92,7 +92,8 @@ function shopperLine(plan: WeekPlan | null, picked: StoreDeals, isPlanStore: boo
 }
 
 export function Shop({ kitchen, go, onPlan }: ShopProps) {
-  const { saved, stores, origin, inventory, shareLocation, clearLocation } = kitchen;
+  const { saved, stores, origin, inventory, shareLocation, clearLocation, grocery, addGrocery, removeGrocery } = kitchen;
+  const [wanted, setWanted] = useState("");
   const plan = saved.plan;
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -122,6 +123,16 @@ export function Shop({ kitchen, go, onPlan }: ShopProps) {
     setLocationProblem(problem);
     setPickedId(null);
   };
+
+  const handleAdd = (event: FormEvent) => {
+    event.preventDefault();
+    const name = wanted.trim();
+    if (name) {
+      void addGrocery(name);
+      setWanted("");
+    }
+  };
+  const listTotal = grocery.reduce((sum, item) => sum + item.price, 0);
 
   const handleSamples = () => {
     setPickedId(null);
@@ -205,6 +216,30 @@ export function Shop({ kitchen, go, onPlan }: ShopProps) {
               </span>
             </span>
             {offer.isInPlan && <span className="offer-check"><Icon name="check" scale={1.5} /></span>}
+            {!offer.isInPlan && !grocery.some((item) => item.name === offer.name) && (
+              <IconButton icon="plus" label={`Add ${offer.name} to my grocery list`} onClick={() => void addGrocery(offer.name)} />
+            )}
+          </li>
+        ))}
+      </ul>
+
+      <SectionTitle title="My grocery list" aside={grocery.length > 0 ? `${plural(grocery.length, "item")} · ${money(listTotal)}` : "empty"} />
+      <form className="chat-form" onSubmit={handleAdd}>
+        <label className="visually-hidden" htmlFor="grocery-input">Item to add</label>
+        <input id="grocery-input" value={wanted} maxLength={60} placeholder="Add milk, eggs, lemons..." autoComplete="off" enterKeyHint="done" onChange={(event) => setWanted(event.target.value)} />
+        <Button type="submit" disabled={wanted.trim().length === 0}>Add</Button>
+      </form>
+      {grocery.length === 0 && <p className="fineprint">Add anything and I will find the store with the best price for it.</p>}
+      <ul className="loot">
+        {grocery.map((item) => (
+          <li key={item.name} className="loot-row">
+            <span className="tile"><PixelEmoji emoji={spriteForName(item.name)} size={36} /></span>
+            <span className="loot-text">
+              <strong>{capitalize(item.name)} <small>{item.pack}</small></strong>
+              <small>{item.store ? `Best price at ${item.store}` : "No price found"}</small>
+            </span>
+            <span className="loot-price"><b>{money(item.price)}</b></span>
+            <IconButton icon="check" label={`Got ${item.name}, remove it`} onClick={() => void removeGrocery(item.name)} />
           </li>
         ))}
       </ul>

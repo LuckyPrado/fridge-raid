@@ -11,15 +11,15 @@ const AGENTS: readonly AgentId[] = ["chef", "nutritionist", "bargain_hunter"];
 const MAX_MESSAGE_CHARS = 400;
 
 const OPENERS: Record<AgentId, string> = {
-  chef: "Tell me what you love and what you will not eat. I cook around both.",
-  nutritionist: "Tell me your goals: calories, protein, or how strict I should be per meal.",
-  bargain_hunter: "Tell me your weekly budget and I will make every dollar work.",
+  chef: "Ask me what to cook or what to use first. Or tell me what you love and what you will not eat.",
+  nutritionist: "Ask how your day is going, or tell me a goal: calories, protein, or a limit per meal.",
+  bargain_hunter: "Ask what anything costs, have me add it to your list, or set your weekly budget.",
 };
 
 const SUGGESTIONS: Record<AgentId, readonly string[]> = {
-  chef: ["I love tacos and pasta", "I don't eat mushrooms", "I'm vegetarian now", "Plan 3 dinners"],
-  nutritionist: ["I want 120 g of protein a day", "Set my day to 2200 calories", "Keep meals under 600 calories"],
-  bargain_hunter: ["Make my budget $40", "Cut my budget to $15", "What is my budget right now?"],
+  chef: ["What should I cook tonight?", "What should I use first?", "I love tacos and pasta", "I don't eat mushrooms"],
+  nutritionist: ["How am I doing today?", "I want 120 g of protein a day", "Set my day to 2200 calories"],
+  bargain_hunter: ["How much is milk?", "Add eggs to my grocery list", "What is my budget right now?", "Make my budget $40"],
 };
 
 type ChatProps = {

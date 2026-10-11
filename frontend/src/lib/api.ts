@@ -10,6 +10,11 @@ import type {
   StatusInfo,
   AgentId,
   ChatReply,
+  DemoState,
+  GroceryItem,
+  MealEstimate,
+  Quote,
+  ScanResult,
   Origin,
   StoreBoard,
   Threat,
@@ -52,6 +57,17 @@ function json(method: string, body: unknown): RequestInit {
   return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
 
+function photoForm(photo: File): FormData {
+  const form = new FormData();
+  form.append("photo", photo);
+  return form;
+}
+
+/** Address of the fridge photo from the latest scan. The stamp defeats the browser cache after a new scan. */
+export function scanPhotoUrl(stamp: number): string {
+  return `${API_BASE}/api/scan/photo?t=${stamp}`;
+}
+
 export const api = {
   status: (): Promise<StatusInfo> => request("/api/status"),
   demoFridges: (): Promise<DemoFridge[]> => request("/api/demo-fridges"),
@@ -70,15 +86,22 @@ export const api = {
   stores: (): Promise<StoreBoard> => request("/api/stores"),
   findNearby: (origin: Origin): Promise<StoreBoard> => request("/api/nearby", json("POST", origin)),
   forgetNearby: (): Promise<StoreBoard> => request("/api/nearby", { method: "DELETE" }),
-  chat: (agent: AgentId, message: string): Promise<ChatReply> => request("/api/chat", json("POST", { agent, message })),
+  chat: (agent: AgentId, message: string, today: string): Promise<ChatReply> =>
+    request(`/api/chat?today=${today}`, json("POST", { agent, message })),
   inventory: async (): Promise<InventoryItem[]> =>
     (await request<{ items: InventoryItem[] }>("/api/inventory")).items,
   saveInventory: async (items: InventoryItem[]): Promise<InventoryItem[]> =>
     (await request<{ items: InventoryItem[] }>("/api/inventory", json("PUT", { items }))).items,
   threat: (items: InventoryItem[]): Promise<Threat> => request("/api/threat", json("POST", { items })),
-  scout: async (photo: File): Promise<InventoryItem[]> => {
-    const form = new FormData();
-    form.append("photo", photo);
-    return (await request<{ items: InventoryItem[] }>("/api/scout", { method: "POST", body: form })).items;
-  },
+  scout: (photo: File): Promise<ScanResult> => request("/api/scout", { method: "POST", body: photoForm(photo) }),
+  lastScan: (): Promise<ScanResult> => request("/api/scan/last"),
+  mealPhoto: (photo: File): Promise<MealEstimate> => request("/api/meal-photo", { method: "POST", body: photoForm(photo) }),
+  quote: (names: string[]): Promise<Quote[]> => request("/api/quote", json("POST", { names })),
+  grocery: async (): Promise<GroceryItem[]> => (await request<{ items: GroceryItem[] }>("/api/grocery")).items,
+  addGrocery: async (name: string): Promise<GroceryItem[]> =>
+    (await request<{ items: GroceryItem[] }>("/api/grocery", json("POST", { name }))).items,
+  saveGrocery: async (items: GroceryItem[]): Promise<GroceryItem[]> =>
+    (await request<{ items: GroceryItem[] }>("/api/grocery", json("PUT", { items }))).items,
+  demo: (): Promise<DemoState> => request("/api/demo"),
+  setDemo: (on: boolean): Promise<DemoState> => request("/api/demo", json("PUT", { on })),
 };

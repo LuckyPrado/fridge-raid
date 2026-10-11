@@ -31,6 +31,7 @@ def _draft(**changes: Any) -> ChatDraft:
         "reply": "Done.", "name": "", "diet": "", "budget": NO_CHANGE, "meals": NO_CHANGE,
         "daily_calories": NO_CHANGE, "daily_protein_g": NO_CHANGE, "max_calories": NO_CHANGE,
         "max_sodium_mg": NO_CHANGE, "add_favorites": [], "remove_favorites": [], "add_avoid": [], "remove_avoid": [],
+        "add_to_grocery": [],
     }
     return ChatDraft(**{**fields, **changes})
 
@@ -228,7 +229,7 @@ async def test_converse_falls_back_to_rules_when_the_model_fails_or_is_missing()
         reply, updated, changes = await converse(llm, "chef", "I hate mushrooms", Profile())
 
         assert updated.goals.avoid == ("mushrooms",)
-        assert reply.startswith("Done.") and changes == ["Avoiding: mushrooms"]
+        assert "mushrooms" in reply and changes == ["Avoiding: mushrooms"]
 
     reply, _, changes = await converse(None, "chef", "hello", Profile())
     assert changes == [] and "did not catch" in reply

@@ -53,10 +53,16 @@ await shot("0-setup-chef");
 await page.getByRole("button", { name: "Next" }).click();
 await page.getByRole("button", { name: "Shrimp" }).click();
 await page.getByRole("button", { name: "Next" }).click();
+await page.getByRole("button", { name: "Male", exact: true }).click();
+await page.getByLabel("Height, feet").fill("5");
+await page.getByLabel("Inches").fill("10");
 await page.getByRole("button", { name: /Build muscle/ }).click();
+await page.getByText(/\d{4} kcal · \d+ g protein/).waitFor();
 await shot("0-setup-nutritionist");
 await page.getByRole("button", { name: "Next" }).click();
-await page.getByRole("button", { name: "4 dinners" }).click();
+await page.getByLabel("Weekly budget, $").fill("99999");
+await page.getByLabel("Dinners to plan").fill("4");
+await page.getByLabel("Weekly budget, $").fill("25");
 await shot("0-setup-shopper");
 await noSidewaysScroll("setup");
 await page.getByRole("button", { name: "Next" }).click();
@@ -150,6 +156,12 @@ await shot("13-shop-real");
 await noSidewaysScroll("shop with real stores");
 await page.getByRole("button", { name: "Use sample stores" }).click();
 await page.getByRole("button", { name: "Use my location" }).waitFor();
+
+// The Shopper prices anything you add to the grocery list.
+await page.getByLabel("Item to add").fill("lemon");
+await page.getByRole("button", { name: "Add", exact: true }).click();
+await page.getByText(/Best price at /).first().waitFor();
+await shot("13b-grocery");
 
 // Talk to the Chef and the Shopper. The changes land in the saved profile.
 await page.getByRole("button", { name: "Talk to the Shopper" }).click();

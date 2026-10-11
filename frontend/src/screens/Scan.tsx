@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 import type { Kitchen } from "../hooks/useKitchen";
-import { api, errorMessage } from "../lib/api";
 import { capitalize, isAtRisk, spriteFor } from "../lib/food";
-import { preparePhoto } from "../lib/photo";
 import type { Go } from "../nav";
 import { PixelEmoji } from "../pixel/PixelEmoji";
 import type { DemoFridge, InventoryItem } from "../types";
@@ -50,8 +48,10 @@ function PixelFridge({ fridge }: { fridge: DemoFridge | undefined }) {
 }
 
 export function Scan({ kitchen, go }: ScanProps) {
-  const { fridges, status, saveInventory } = kitchen;
-  const isLive = status?.mode === "gemini";
+  const { fridges, status, saveInventory, scanFridge, clearScanView } = kitchen;
+  // The camera works with a live model, or in demo mode once one real scan has been recorded.
+  const isLive = status?.scan_ready ?? false;
+  const isDemo = status?.mode === "demo";
   const [fridgeId, setFridgeId] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -88,6 +88,7 @@ export function Scan({ kitchen, go }: ScanProps) {
     }
     setIsBusy(true);
     setProblem(null);
+    clearScanView();
     sampleTimer.current = window.setTimeout(() => void finish(sample.items), SAMPLE_SCAN_MS);
   };
 
@@ -100,17 +101,14 @@ export function Scan({ kitchen, go }: ScanProps) {
     setProblem(null);
     setIsBusy(true);
     setPhotoUrl(URL.createObjectURL(file));
-    try {
-      const items = await api.scout(await preparePhoto(file));
-      if (items.length === 0) {
-        throw new Error("No food found in that photo. Open the door wide and try again.");
-      }
-      await finish(items);
-    } catch (error: unknown) {
-      setProblem(errorMessage(error));
+    const scanProblem = await scanFridge(file);
+    if (scanProblem) {
+      setProblem(scanProblem);
       setPhotoUrl(null);
       setIsBusy(false);
+      return;
     }
+    go({ name: "fridge" });
   };
 
   const hint = isBusy ? "Your party is reading the shelves" : "Keep every shelf inside the frame";
@@ -126,7 +124,7 @@ export function Scan({ kitchen, go }: ScanProps) {
 
       <div className={`viewfinder ${isBusy ? "is-scanning" : ""}`}>
         {photoUrl ? <img className="viewfinder-photo" src={photoUrl} alt="Your fridge photo" /> : <PixelFridge fridge={sample} />}
-        <span className="viewfinder-badge">{isLive ? "Live camera" : "Demo camera"}</span>
+        <span className="viewfinder-badge">{isLive && !isDemo ? "Live camera" : "Demo camera"}</span>
         <div className="viewfinder-frame" />
         <div className="viewfinder-beam" />
         <p className="viewfinder-hint" role="status">{hint}</p>

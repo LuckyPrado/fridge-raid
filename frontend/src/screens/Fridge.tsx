@@ -114,7 +114,7 @@ function ItemSheet({ item, isNew, onSave, onRemove, onClose }: ItemSheetProps) {
 }
 
 export function Fridge({ kitchen, go, isAdding = false, onPlan }: FridgeProps) {
-  const { inventory, threat, saveInventory } = kitchen;
+  const { inventory, threat, saveInventory, scanView } = kitchen;
   const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<InventoryItem | null>(isAdding ? blankItem() : null);
   const soon = inventory.filter((item) => isAtRisk(item.days_left));
@@ -162,6 +162,28 @@ export function Fridge({ kitchen, go, isAdding = false, onPlan }: FridgeProps) {
   return (
     <div className="screen has-cta">
       <ScreenHeader eyebrow="Scan review · 02" title="Look what we found!" onBack={() => go({ name: "scan" })} action={addButton} />
+
+      {scanView && (
+        <figure className="scan-photo px-box">
+          <img src={scanView.photoUrl} alt="Your fridge photo" />
+          {scanView.boxes.map((box, index) => (
+            <span
+              key={box.item_id}
+              className="found-box"
+              style={{
+                left: `${box.x * 100}%`,
+                top: `${box.y * 100}%`,
+                width: `${box.width * 100}%`,
+                height: `${box.height * 100}%`,
+                animationDelay: `${index * 140}ms`,
+              }}
+            >
+              <b>{capitalize(box.name)}</b>
+            </span>
+          ))}
+          <figcaption>{`${plural(scanView.boxes.length, "item")} spotted in your photo`}</figcaption>
+        </figure>
+      )}
 
       <section className="summary px-box px-mint">
         <span className="summary-icon"><Icon name="scan" scale={3} /></span>

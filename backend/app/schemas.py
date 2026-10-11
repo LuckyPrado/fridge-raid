@@ -21,6 +21,7 @@ MAX_FAVORITES = 8
 MAX_AVOID = 12
 MAX_NEARBY_STORES = 8
 MAX_CHAT_CHARS = 400
+MAX_GROCERY_ITEMS = 60
 MAX_WATER_GLASSES = 20
 
 Day = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
@@ -221,6 +222,72 @@ class ChatReply(Frozen):
     changes: tuple[str, ...]
 
 
+class FoundBox(Frozen):
+    """Where one scanned item sits in the fridge photo, as fractions of the photo width and height."""
+
+    item_id: str
+    name: str
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    width: float = Field(gt=0, le=1)
+    height: float = Field(gt=0, le=1)
+
+
+class ScanResult(Frozen):
+    items: tuple[InventoryItem, ...] = Field(max_length=MAX_INVENTORY_ITEMS)
+    boxes: tuple[FoundBox, ...] = Field(default=(), max_length=MAX_INVENTORY_ITEMS)
+    has_photo: bool = False
+
+
+class MealEstimate(Frozen):
+    name: str = Field(min_length=1, max_length=80)
+    calories: int = Field(ge=0, le=5000)
+    protein_g: int = Field(ge=0, le=500)
+    sodium_mg: int = Field(ge=0, le=20000)
+
+
+class Quote(Frozen):
+    """The best price the Shopper found for one item among the active stores."""
+
+    name: str
+    store: str
+    distance_mi: float
+    price: float
+    list_price: float
+    pack_size: float
+    unit: str
+    known: bool
+
+
+class GroceryItem(Frozen):
+    name: str = Field(min_length=1, max_length=60)
+    store: str = Field(default="", max_length=60)
+    price: float = Field(default=0, ge=0, le=MAX_MONEY, allow_inf_nan=False)
+    pack: str = Field(default="", max_length=40)
+
+
+class GroceryList(Frozen):
+    items: tuple[GroceryItem, ...] = Field(default=(), max_length=MAX_GROCERY_ITEMS)
+
+
+class GroceryAdd(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+
+
+class QuoteRequest(BaseModel):
+    names: list[Favorite] = Field(min_length=1, max_length=30)
+
+
+class DemoState(Frozen):
+    on: bool
+    has_scan: bool
+    has_meal: bool
+
+
+class DemoSwitch(BaseModel):
+    on: bool
+
+
 class CookRequest(BaseModel):
     dish_id: str = Field(min_length=1, max_length=16)
     day: Day
@@ -254,6 +321,15 @@ class ScoutDraftItem(BaseModel):
     quantity: float
     unit: str
     days_left: int
+    # [ymin, xmin, ymax, xmax] on a 0 to 1000 grid over the photo.
+    box: list[int]
+
+
+class MealDraft(BaseModel):
+    name: str
+    calories: int
+    protein_g: int
+    sodium_mg: int
 
 
 class ScoutDraft(BaseModel):
@@ -296,6 +372,8 @@ class ChatDraft(BaseModel):
     remove_favorites: list[str]
     add_avoid: list[str]
     remove_avoid: list[str]
+    # Items the player asked to put on their grocery list.
+    add_to_grocery: list[str]
 
 
 class VerdictDraft(BaseModel):

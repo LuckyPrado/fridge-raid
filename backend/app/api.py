@@ -8,17 +8,17 @@ import logging
 from typing import AsyncIterator, Generic, TypeVar
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ValidationError
 
-from app import tracker
+from app import demo, tracker
 from app.config import MAX_UPLOAD_BYTES
 from app.llm import LLMError
 from app.negotiation import run_raid
 from app.optimizer import at_risk_items, waste_value_total
 from app.ratelimit import rate_limit
-from app.schemas import InventoryPayload, RaidRequest, RaidStat, WeekPlan
-from app.scout import scout_fridge
+from app.schemas import InventoryPayload, MealEstimate, RaidRequest, RaidStat, ScanResult, WeekPlan
+from app.scout import estimate_meal, scan_fridge
 from app.services import DemoFridge, Services, get_services
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,8 @@ MULTIPART_OVERHEAD_BYTES = 64 * 1024
 SCOUT_REQUESTS_PER_MINUTE = 6
 RAID_REQUESTS_PER_MINUTE = 10
 WRITE_REQUESTS_PER_MINUTE = 60
+# A short pause so a replayed scan still reads as a scan on screen.
+DEMO_SCAN_SECONDS = 1.5
 
 
 class Envelope(BaseModel, Generic[T]):
@@ -40,6 +42,8 @@ class Envelope(BaseModel, Generic[T]):
 
 class StatusInfo(BaseModel):
     mode: str
+    # True when a fridge photo can be read: a live model is set, or demo mode has a recorded scan.
+    scan_ready: bool = False
     model: str | None
     database: str
 
@@ -55,9 +59,11 @@ router = APIRouter(prefix="/api")
 @router.get("/status", response_model=Envelope[StatusInfo])
 def get_status(services: Services = Depends(get_services)) -> Envelope[StatusInfo]:
     live = services.live_party is not None
+    is_demo = demo.is_on(services.repository)
     return Envelope(
         data=StatusInfo(
-            mode="gemini" if live else "offline",
+            mode="demo" if is_demo else ("gemini" if live else "offline"),
+            scan_ready=(live and not is_demo) or demo.state(services.repository).has_scan,
             model=services.settings.gemini_model if live else None,
             database=services.repository.name,
         )
@@ -105,19 +111,8 @@ def reject_oversized_body(request: Request) -> None:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Photo is too large. The limit is 8 MB.")
 
 
-@router.post(
-    "/scout",
-    response_model=Envelope[InventoryPayload],
-    dependencies=[Depends(rate_limit(SCOUT_REQUESTS_PER_MINUTE)), Depends(reject_oversized_body)],
-)
-async def scout(
-    photo: UploadFile = File(...), services: Services = Depends(get_services)
-) -> Envelope[InventoryPayload]:
-    if services.llm is None:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "The Scout needs a Gemini API key. Pick a demo fridge or add items by hand.",
-        )
+async def _read_photo(photo: UploadFile) -> bytes:
+    """Validate an uploaded photo and return its bytes."""
     if photo.content_type not in ALLOWED_IMAGE_TYPES:
         raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Upload a JPEG, PNG, or WebP photo.")
     data = await photo.read(MAX_UPLOAD_BYTES + 1)
@@ -125,14 +120,79 @@ async def scout(
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Photo is too large. The limit is 8 MB.")
     if not data:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "The uploaded photo is empty.")
+    return data
+
+
+photo_guards = [Depends(rate_limit(SCOUT_REQUESTS_PER_MINUTE)), Depends(reject_oversized_body)]
+
+
+@router.post("/scout", response_model=Envelope[ScanResult], dependencies=photo_guards)
+async def scout(photo: UploadFile = File(...), services: Services = Depends(get_services)) -> Envelope[ScanResult]:
+    """Read a fridge photo. In demo mode, replay the latest recorded scan instead of calling the model."""
+    repository = services.repository
+    data = await _read_photo(photo)
+    if services.llm is None or await asyncio.to_thread(demo.is_on, repository):
+        replay = await asyncio.to_thread(demo.recorded_scan, repository)
+        if replay is None:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "No fridge scan is recorded yet. Scan once with a Gemini key, pick a sample fridge, or add items by hand.",
+            )
+        await asyncio.sleep(DEMO_SCAN_SECONDS)
+        return Envelope(data=replay)
     try:
-        items = await scout_fridge(services.llm, data, photo.content_type, services.catalog)
+        result = await scan_fridge(services.llm, data, photo.content_type, services.catalog)
     except LLMError as exc:
         logger.warning("Scout failed: %s", exc)
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY, "The Scout could not read that photo. Try again or add items by hand."
         ) from exc
-    return Envelope(data=InventoryPayload(items=items))
+    await asyncio.to_thread(demo.record_scan, repository, result, data, photo.content_type)
+    return Envelope(data=result)
+
+
+@router.get("/scan/last", response_model=Envelope[ScanResult])
+def last_scan(services: Services = Depends(get_services)) -> Envelope[ScanResult]:
+    """The latest recorded scan, so the phone can redraw the highlighted photo after a reload."""
+    saved = demo.recorded_scan(services.repository)
+    if saved is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No fridge scan is saved.")
+    return Envelope(data=saved)
+
+
+@router.get("/scan/photo")
+def scan_photo(services: Services = Depends(get_services)) -> Response:
+    """The fridge photo from the latest scan, for drawing the found items over it."""
+    saved = demo.recorded_photo(services.repository)
+    if saved is None or saved.mime_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No fridge photo is saved.")
+    return Response(content=saved.data, media_type=saved.mime_type, headers={"Cache-Control": "no-store"})
+
+
+@router.post("/meal-photo", response_model=Envelope[MealEstimate], dependencies=photo_guards)
+async def meal_photo(
+    photo: UploadFile = File(...), services: Services = Depends(get_services)
+) -> Envelope[MealEstimate]:
+    """Estimate a meal from a photo so it can be logged. Nothing is logged until the player confirms."""
+    repository = services.repository
+    data = await _read_photo(photo)
+    if services.llm is None or await asyncio.to_thread(demo.is_on, repository):
+        replay = await asyncio.to_thread(demo.recorded_meal, repository)
+        if replay is None:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE, "Meal photos need a Gemini API key. Log this one by hand."
+            )
+        await asyncio.sleep(DEMO_SCAN_SECONDS)
+        return Envelope(data=replay)
+    try:
+        estimate = await estimate_meal(services.llm, data, photo.content_type)
+    except LLMError as exc:
+        logger.warning("Meal estimate failed: %s", exc)
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "That photo could not be read as a meal. Log it by hand."
+        ) from exc
+    await asyncio.to_thread(demo.record_meal, repository, estimate)
+    return Envelope(data=estimate)
 
 
 def _remember_plan(event: dict, services: Services) -> None:
@@ -144,7 +204,8 @@ def _remember_plan(event: dict, services: Services) -> None:
 
 
 async def _sse(request: RaidRequest, services: Services) -> AsyncIterator[str]:
-    party = services.party_for(request.offline)
+    is_demo = await asyncio.to_thread(demo.is_on, services.repository)
+    party = services.party_for(request.offline or is_demo)
     stores = await asyncio.to_thread(tracker.active_stores, services.repository, services.stores)
     try:
         async for event in run_raid(request, party, services.offline_party, services.catalog, stores):

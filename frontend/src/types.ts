@@ -96,7 +96,8 @@ export interface RaidRequest {
 }
 
 export interface StatusInfo {
-  mode: "gemini" | "offline";
+  mode: "gemini" | "offline" | "demo";
+  scan_ready: boolean;
   model: string | null;
   database: string;
 }
@@ -196,6 +197,57 @@ export interface ChatMessage {
   from: "you" | AgentId;
   text: string;
   changes: string[];
+}
+
+export interface FoundBox {
+  item_id: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ScanResult {
+  items: InventoryItem[];
+  boxes: FoundBox[];
+  has_photo: boolean;
+}
+
+export interface ScanView {
+  photoUrl: string;
+  boxes: FoundBox[];
+}
+
+export interface MealEstimate {
+  name: string;
+  calories: number;
+  protein_g: number;
+  sodium_mg: number;
+}
+
+export interface Quote {
+  name: string;
+  store: string;
+  distance_mi: number;
+  price: number;
+  list_price: number;
+  pack_size: number;
+  unit: string;
+  known: boolean;
+}
+
+export interface GroceryItem {
+  name: string;
+  store: string;
+  price: number;
+  pack: string;
+}
+
+export interface DemoState {
+  on: boolean;
+  has_scan: boolean;
+  has_meal: boolean;
 }
 
 export interface CookResult {

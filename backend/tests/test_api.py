@@ -117,7 +117,7 @@ def test_rate_limiter_blocks_after_the_limit_and_recovers() -> None:
 def test_status_reports_offline_mode_without_a_key(client: TestClient) -> None:
     body = client.get("/api/status").json()
 
-    assert body == {"success": True, "data": {"mode": "offline", "model": None, "database": "sqlite"}, "error": None}
+    assert body == {"success": True, "data": {"mode": "offline", "scan_ready": False, "model": None, "database": "sqlite"}, "error": None}
 
 
 def test_demo_fridges_are_listed_with_items(client: TestClient) -> None:
@@ -194,7 +194,7 @@ def test_scout_is_unavailable_without_a_key(client: TestClient) -> None:
     response = client.post("/api/scout", files={"photo": ("fridge.png", b"fake", "image/png")})
 
     assert response.status_code == 503
-    assert "demo fridge" in response.json()["error"]
+    assert "sample fridge" in response.json()["error"]
 
 
 class _ScoutLLM:
@@ -204,7 +204,7 @@ class _ScoutLLM:
     async def generate(self, **_: Any) -> ScoutDraft:
         if self._fail:
             raise LLMError("outage")
-        return ScoutDraft(items=[ScoutDraftItem(name="Eggs", category="dairy", quantity=6, unit="egg", days_left=9)])
+        return ScoutDraft(items=[ScoutDraftItem(name="Eggs", category="dairy", quantity=6, unit="egg", days_left=9, box=[0, 0, 500, 500])])
 
 
 def _client_with_llm(settings: Settings, llm: Any) -> TestClient:

@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { api, errorMessage } from "../lib/api";
+import { api, errorMessage, scanPhotoUrl } from "../lib/api";
+import { preparePhoto } from "../lib/photo";
 import { localDay } from "../lib/plan";
 import type {
   CookResult,
   DaySummary,
   DemoFridge,
+  DemoState,
+  GroceryItem,
+  MealEstimate,
+  ScanView,
   FoodLogInput,
   InventoryItem,
   Profile,
@@ -84,6 +89,40 @@ export interface Kitchen {
   chat: (agent: AgentId, message: string) => Promise<ChatReply | null>;
   /** Erase everything saved and reload the app as a first-time player. */
   startOver: () => Promise<void>;
+  /** The fridge photo and the boxes around what was found, after a photo scan. */
+  scanView: ScanView | null;
+  /** Read a fridge photo into the stash. Returns a problem message, or null when it worked. */
+  scanFridge: (photo: File) => Promise<string | null>;
+  clearScanView: () => void;
+  estimateMeal: (photo: File) => Promise<MealEstimate | null>;
+  grocery: GroceryItem[];
+  addGrocery: (name: string) => Promise<void>;
+  removeGrocery: (name: string) => Promise<void>;
+  demo: DemoState;
+  setDemo: (on: boolean) => Promise<void>;
+}
+
+const SCAN_SHOWN_KEY = "fridge-raid:scan-shown";
+const NO_DEMO: DemoState = { on: false, has_scan: false, has_meal: false };
+
+function rememberScanShown(isShown: boolean): void {
+  try {
+    if (isShown) {
+      window.sessionStorage.setItem(SCAN_SHOWN_KEY, "1");
+    } else {
+      window.sessionStorage.removeItem(SCAN_SHOWN_KEY);
+    }
+  } catch {
+    // Storage can be blocked. The photo then just does not come back after a reload.
+  }
+}
+
+function wasScanShown(): boolean {
+  try {
+    return window.sessionStorage.getItem(SCAN_SHOWN_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 const LOCATION_TIMEOUT_MS = 12000;
@@ -125,6 +164,9 @@ export function useKitchen(): Kitchen {
   const [day, setDay] = useState<DaySummary>(() => emptyDay(today));
   const [progress, setProgress] = useState<Progress>(NO_PROGRESS);
   const [problem, setProblem] = useState<string | null>(null);
+  const [scanView, setScanView] = useState<ScanView | null>(null);
+  const [grocery, setGrocery] = useState<GroceryItem[]>([]);
+  const [demo, setDemoState] = useState<DemoState>(NO_DEMO);
 
   useEffect(() => {
     let isCancelled = false;
@@ -137,8 +179,10 @@ export function useKitchen(): Kitchen {
       api.plan(),
       api.day(today),
       api.progress(today),
+      api.grocery(),
+      api.demo(),
     ])
-      .then(([nextStatus, nextFridges, nextStores, items, nextProfile, plan, nextDay, nextProgress]) => {
+      .then(([nextStatus, nextFridges, nextStores, items, nextProfile, plan, nextDay, nextProgress, nextGrocery, nextDemo]) => {
         if (isCancelled) {
           return;
         }
@@ -151,6 +195,8 @@ export function useKitchen(): Kitchen {
         setSaved(plan);
         setDay(nextDay);
         setProgress(nextProgress);
+        setGrocery(nextGrocery);
+        setDemoState(nextDemo);
         setHasLoaded(true);
       })
       .catch((error: unknown) => !isCancelled && setProblem(errorMessage(error)))
@@ -262,8 +308,9 @@ export function useKitchen(): Kitchen {
 
   const chat = useCallback(async (agent: AgentId, message: string) => {
     try {
-      const reply = await api.chat(agent, message);
+      const reply = await api.chat(agent, message, today);
       setProfile(reply.profile);
+      await refresh(() => api.grocery(), setGrocery);
       if (reply.changes.length > 0) {
         await refresh(() => api.day(today), setDay);
       }
@@ -288,6 +335,78 @@ export function useKitchen(): Kitchen {
       // Storage can be blocked. The server data is already gone, which is what matters.
     }
     window.location.reload();
+  }, []);
+
+  // After a reload, bring back the highlighted fridge photo if one was on screen.
+  useEffect(() => {
+    if (!hasLoaded || !wasScanShown()) {
+      return;
+    }
+    let isCancelled = false;
+    api
+      .lastScan()
+      .then((scan) => !isCancelled && scan.has_photo && setScanView({ photoUrl: scanPhotoUrl(Date.now()), boxes: scan.boxes }))
+      .catch(() => rememberScanShown(false));
+    return () => {
+      isCancelled = true;
+    };
+  }, [hasLoaded]);
+
+  const clearScanView = useCallback(() => {
+    setScanView(null);
+    rememberScanShown(false);
+  }, []);
+
+  const scanFridge = useCallback(async (photo: File) => {
+    try {
+      const scan = await api.scout(await preparePhoto(photo));
+      if (scan.items.length === 0) {
+        return "No food found in that photo. Open the door wide and try again.";
+      }
+      setInventory(scan.items);
+      await api.saveInventory(scan.items);
+      setScanView(scan.has_photo ? { photoUrl: scanPhotoUrl(Date.now()), boxes: scan.boxes } : null);
+      rememberScanShown(scan.has_photo);
+      await refresh(() => api.demo(), setDemoState);
+      return null;
+    } catch (error: unknown) {
+      return errorMessage(error);
+    }
+  }, []);
+
+  const estimateMeal = useCallback(async (photo: File) => {
+    try {
+      return await api.mealPhoto(await preparePhoto(photo));
+    } catch (error: unknown) {
+      setProblem(errorMessage(error));
+      return null;
+    }
+  }, []);
+
+  const addGrocery = useCallback(async (name: string) => {
+    try {
+      setGrocery(await api.addGrocery(name));
+    } catch (error: unknown) {
+      setProblem(`That was not added to your list. ${errorMessage(error)}`);
+    }
+  }, []);
+
+  const removeGrocery = useCallback(async (name: string) => {
+    try {
+      const current = await api.grocery();
+      setGrocery(await api.saveGrocery(current.filter((item) => item.name !== name)));
+    } catch (error: unknown) {
+      setProblem(errorMessage(error));
+    }
+  }, []);
+
+  const setDemo = useCallback(async (on: boolean) => {
+    try {
+      setDemoState(await api.setDemo(on));
+      setStatus(await api.status());
+    } catch (error: unknown) {
+      setProblem(errorMessage(error));
+    }
   }, []);
 
   return {
@@ -317,5 +436,14 @@ export function useKitchen(): Kitchen {
     clearLocation,
     chat,
     startOver,
+    scanView,
+    scanFridge,
+    clearScanView,
+    estimateMeal,
+    grocery,
+    addGrocery,
+    removeGrocery,
+    demo,
+    setDemo,
   };
 }

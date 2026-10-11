@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { capitalize } from "../lib/food";
+import { boundedNumber, dailyTargets, heightCm, HEIGHT_LIMITS, type Aim, type Sex } from "../lib/targets";
 import type { AgentId, Diet, Profile } from "../types";
 import { AgentBubble, Button } from "../ui/kit";
 import { Room, Tower } from "../ui/Rooms";
@@ -14,16 +15,19 @@ const DIETS: ReadonlyArray<{ id: Diet; label: string }> = [
   { id: "vegan", label: "Vegan" },
   { id: "pescatarian", label: "Pescatarian" },
 ];
-const TARGETS = [
-  { id: "lighter", label: "Eat a little lighter", calories: 1600, protein: 90 },
-  { id: "balanced", label: "Stay balanced", calories: 2000, protein: 100 },
-  { id: "muscle", label: "Build muscle", calories: 2400, protein: 140 },
-] as const;
-const BUDGETS = [15, 25, 40, 60] as const;
-const DINNER_COUNTS = [3, 4, 5] as const;
+const AIMS: ReadonlyArray<{ id: Aim; label: string }> = [
+  { id: "lighter", label: "Eat a little lighter" },
+  { id: "balanced", label: "Stay balanced" },
+  { id: "muscle", label: "Build muscle" },
+];
+const SEXES: ReadonlyArray<{ id: Sex; label: string }> = [
+  { id: "female", label: "Female" },
+  { id: "male", label: "Male" },
+  { id: "other", label: "Rather not say" },
+];
 const MAX_AVOID = 12;
-
-type TargetId = (typeof TARGETS)[number]["id"];
+const BUDGET_LIMITS = { min: 0, max: 500, fallback: 25 } as const;
+const DINNER_LIMITS = { min: 1, max: 7, fallback: 4 } as const;
 
 interface Step {
   agent: AgentId | null;
@@ -34,7 +38,7 @@ const STEPS: readonly Step[] = [
   { agent: null, line: () => "" },
   { agent: "chef", line: () => "Welcome to my kitchen! I cook with what you already have. First, who am I cooking for, and what do you love?" },
   { agent: "chef", line: (name) => `Good taste${name ? `, ${name}` : ""}. Now the important part: anything I should never put on your plate?` },
-  { agent: "nutritionist", line: (name) => `My turn${name ? `, ${name}` : ""}. I keep count so you do not have to. What are we working toward?` },
+  { agent: "nutritionist", line: (name) => `My turn${name ? `, ${name}` : ""}. Tell me a little about you and what we are working toward, and I will set your daily goals.` },
   { agent: "bargain_hunter", line: () => "And I watch the wallet. How much can we spend on groceries each week, and how many dinners should we plan?" },
   { agent: null, line: () => "" },
 ];
@@ -57,14 +61,20 @@ export function Setup({ profile, onFinish }: SetupProps) {
   const [avoid, setAvoid] = useState<string[]>(profile.goals.avoid);
   const [moreAvoid, setMoreAvoid] = useState("");
   const [diet, setDiet] = useState<Diet>(profile.goals.diet);
-  const [target, setTarget] = useState<TargetId>("balanced");
-  const [budget, setBudget] = useState<number>(profile.goals.budget);
-  const [meals, setMeals] = useState<number>(profile.goals.meals);
+  const [sex, setSex] = useState<Sex>("other");
+  const [feet, setFeet] = useState("5");
+  const [inches, setInches] = useState("7");
+  const [aim, setAim] = useState<Aim>("balanced");
+  const [budgetText, setBudgetText] = useState(String(profile.goals.budget));
+  const [mealsText, setMealsText] = useState(String(profile.goals.meals));
   const [isSaving, setIsSaving] = useState(false);
 
   const current = STEPS[step];
   const cleanName = name.trim();
-  const chosen = TARGETS.find((entry) => entry.id === target) ?? TARGETS[1];
+  const cm = heightCm(boundedNumber(feet, HEIGHT_LIMITS.minFeet, HEIGHT_LIMITS.maxFeet, 5), boundedNumber(inches, 0, 11, 0));
+  const chosen = dailyTargets(sex, cm, aim);
+  const budget = Math.round(boundedNumber(budgetText, BUDGET_LIMITS.min, BUDGET_LIMITS.max, BUDGET_LIMITS.fallback) * 100) / 100;
+  const meals = Math.round(boundedNumber(mealsText, DINNER_LIMITS.min, DINNER_LIMITS.max, DINNER_LIMITS.fallback));
   const allFavorites = parseFavorites([...favorites, moreFavorites].join(","));
   const allAvoid = parseFavorites([...avoid, moreAvoid].join(","), MAX_AVOID);
   const isLast = step === STEPS.length - 1;
@@ -164,43 +174,60 @@ export function Setup({ profile, onFinish }: SetupProps) {
       )}
 
       {step === 3 && (
-        <div className="setup-question">
-          <h2>Your goal</h2>
-          <div className="choice-row" role="group" aria-label="Your goal">
-            {TARGETS.map((entry) => (
-              <button type="button" key={entry.id} className={`choice choice-wide ${target === entry.id ? "is-picked" : ""}`} aria-pressed={target === entry.id} onClick={() => setTarget(entry.id)}>
-                {entry.label}
-                <small>{`${entry.calories} kcal and ${entry.protein} g protein a day`}</small>
-              </button>
-            ))}
+        <>
+          <div className="setup-question">
+            <h2>About you</h2>
+            <div className="choice-row" role="group" aria-label="Sex">
+              {SEXES.map((entry) => (
+                <button type="button" key={entry.id} className={`choice ${sex === entry.id ? "is-picked" : ""}`} aria-pressed={sex === entry.id} onClick={() => setSex(entry.id)}>
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+            <div className="number-row">
+              <label className="number-field">
+                <span>Height, feet</span>
+                <input className="setup-input" type="number" inputMode="numeric" min={HEIGHT_LIMITS.minFeet} max={HEIGHT_LIMITS.maxFeet} value={feet} onChange={(event) => setFeet(event.target.value)} />
+              </label>
+              <label className="number-field">
+                <span>Inches</span>
+                <input className="setup-input" type="number" inputMode="numeric" min={0} max={11} value={inches} onChange={(event) => setInches(event.target.value)} />
+              </label>
+            </div>
           </div>
-          <p className="fineprint">These are starting points, not medical advice. You can fine-tune them by talking to me later.</p>
-        </div>
+          <div className="setup-question">
+            <h2>Your goal</h2>
+            <div className="choice-row" role="group" aria-label="Your goal">
+              {AIMS.map((entry) => (
+                <button type="button" key={entry.id} className={`choice ${aim === entry.id ? "is-picked" : ""}`} aria-pressed={aim === entry.id} onClick={() => setAim(entry.id)}>
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <section className="target px-box px-mint" aria-live="polite">
+            <p className="eyebrow">Your daily goals</p>
+            <strong>{`${chosen.calories} kcal · ${chosen.protein} g protein`}</strong>
+            <small>{`Worked out for ${cm} cm. An estimate, not medical advice. Fine-tune it by talking to me later.`}</small>
+          </section>
+        </>
       )}
 
       {step === 4 && (
-        <>
-          <div className="setup-question">
-            <h2>Weekly grocery budget</h2>
-            <div className="choice-row" role="group" aria-label="Weekly grocery budget">
-              {BUDGETS.map((amount) => (
-                <button type="button" key={amount} className={`choice ${budget === amount ? "is-picked" : ""}`} aria-pressed={budget === amount} onClick={() => setBudget(amount)}>
-                  {`$${amount}`}
-                </button>
-              ))}
-            </div>
+        <div className="setup-question">
+          <div className="number-row">
+            <label className="number-field">
+              <span>Weekly budget, $</span>
+              <input className="setup-input" type="number" inputMode="decimal" min={BUDGET_LIMITS.min} max={BUDGET_LIMITS.max} step="any" value={budgetText} onChange={(event) => setBudgetText(event.target.value)} onBlur={() => setBudgetText(String(budget))} />
+              <small>{`Up to $${BUDGET_LIMITS.max}`}</small>
+            </label>
+            <label className="number-field">
+              <span>Dinners to plan</span>
+              <input className="setup-input" type="number" inputMode="numeric" min={DINNER_LIMITS.min} max={DINNER_LIMITS.max} value={mealsText} onChange={(event) => setMealsText(event.target.value)} onBlur={() => setMealsText(String(meals))} />
+              <small>{`${DINNER_LIMITS.min} to ${DINNER_LIMITS.max}`}</small>
+            </label>
           </div>
-          <div className="setup-question">
-            <h2>Dinners to plan</h2>
-            <div className="choice-row" role="group" aria-label="Dinners to plan">
-              {DINNER_COUNTS.map((count) => (
-                <button type="button" key={count} className={`choice ${meals === count ? "is-picked" : ""}`} aria-pressed={meals === count} onClick={() => setMeals(count)}>
-                  {`${count} dinners`}
-                </button>
-              ))}
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
       {isLast && (

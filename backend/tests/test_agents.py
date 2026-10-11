@@ -84,10 +84,10 @@ def test_parse_structured_accepts_valid_output() -> None:
 def test_scout_drops_unusable_items_and_repairs_the_rest(catalog: Catalog) -> None:
     draft = ScoutDraft(
         items=[
-            ScoutDraftItem(name="Eggs", category="DAIRY", quantity=6, unit="", days_left=9),
-            ScoutDraftItem(name="mystery jar", category="weird", quantity=1, unit="jar", days_left=99999),
-            ScoutDraftItem(name="", category="produce", quantity=1, unit="unit", days_left=3),
-            ScoutDraftItem(name="ghost", category="produce", quantity=0, unit="unit", days_left=3),
+            ScoutDraftItem(name="Eggs", category="DAIRY", quantity=6, unit="", days_left=9, box=[0, 0, 500, 500]),
+            ScoutDraftItem(name="mystery jar", category="weird", quantity=1, unit="jar", days_left=99999, box=[0, 0, 500, 500]),
+            ScoutDraftItem(name="", category="produce", quantity=1, unit="unit", days_left=3, box=[0, 0, 500, 500]),
+            ScoutDraftItem(name="ghost", category="produce", quantity=0, unit="unit", days_left=3, box=[0, 0, 500, 500]),
         ]
     )
 
@@ -99,7 +99,7 @@ def test_scout_drops_unusable_items_and_repairs_the_rest(catalog: Catalog) -> No
 
 
 async def test_scout_raises_when_every_reported_item_is_unusable(catalog: Catalog) -> None:
-    draft = ScoutDraft(items=[ScoutDraftItem(name="", category="x", quantity=1, unit="u", days_left=1)])
+    draft = ScoutDraft(items=[ScoutDraftItem(name="", category="x", quantity=1, unit="u", days_left=1, box=[0, 0, 500, 500])])
     llm = StubLLM({ScoutDraft: draft})
 
     with pytest.raises(LLMError):

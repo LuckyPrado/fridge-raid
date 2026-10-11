@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Iterable, Literal, get_args
+from dataclasses import dataclass
+from typing import Callable, Iterable, Literal, get_args
 
 from app.catalog import normalize_name
 from app.llm import LLM, LLMError
@@ -42,6 +43,7 @@ Rules for the fields you return:
 - "add_favorites" and "add_avoid": short lowercase food names, singular, only ones the player named.
 - "remove_favorites" and "remove_avoid": foods the player wants taken off those lists.
 - A food the player dislikes, cannot eat, or is allergic to goes in "add_avoid".
+- "add_to_grocery": foods the player asked you to put on their grocery or shopping list. Otherwise empty.
 - Change only what the player asked for. Never invent preferences."""
 
 
@@ -134,7 +136,7 @@ def _blank_draft() -> ChatDraft:
     return ChatDraft(
         reply="", name="", diet="", budget=NO_CHANGE, meals=NO_CHANGE, daily_calories=NO_CHANGE,
         daily_protein_g=NO_CHANGE, max_calories=NO_CHANGE, max_sodium_mg=NO_CHANGE,
-        add_favorites=[], remove_favorites=[], add_avoid=[], remove_avoid=[],
+        add_favorites=[], remove_favorites=[], add_avoid=[], remove_avoid=[], add_to_grocery=[],
     )
 
 
@@ -142,6 +144,7 @@ _FOOD_LIST = r"([a-z][a-z ,&]*?)(?:[.!?;]|$| and i | i | but | because | so | pl
 _AVOID = re.compile(r"(?:hate|dislike|allergic to|avoid|can(?:no|')t eat|don'?t (?:like|eat|want)|no more|\bno)\s+" + _FOOD_LIST)
 _LIKE = re.compile(r"(?:love|like|favorite (?:food )?(?:is|are)|enjoy|crave|more)\s+" + _FOOD_LIST)
 _NUMBER = r"\$?\s*(\d+(?:\.\d+)?)"
+_GROCERY = re.compile(r"(?:add|put)\s+(.+?)\s+(?:to|on)\s+(?:my |the )?(?:grocery |shopping )?list")
 
 
 def _split_foods(text: str) -> list[str]:
@@ -167,6 +170,10 @@ def offline_draft(message: str) -> ChatDraft:
     for diet in ("vegetarian", "vegan", "pescatarian"):
         if diet in text:
             draft.diet = "none" if re.search(rf"(?:not|no longer|stop being) {diet}", text) else diet
+    listed = _GROCERY.search(text)
+    if listed:
+        draft.add_to_grocery = _split_foods(listed.group(1))
+        return draft
     avoid_matches = list(_AVOID.finditer(text))
     draft.add_avoid = [food for match in avoid_matches for food in _split_foods(match.group(1))]
     liked_text = text
@@ -176,20 +183,137 @@ def offline_draft(message: str) -> ChatDraft:
     return draft
 
 
-def offline_reply(changes: list[str]) -> str:
+@dataclass(frozen=True)
+class ChatFacts:
+    """What the agents can look up to answer a question without the live model."""
+
+    next_dish: str = ""
+    next_dish_minutes: int = 0
+    use_soon: tuple[str, ...] = ()
+    calories: int = 0
+    protein_g: int = 0
+    plan_cost: float | None = None
+    store: str = ""
+    price_of: Callable[[str], str | None] = lambda name: None
+
+
+@dataclass(frozen=True)
+class ChatOutcome:
+    reply: str
+    profile: Profile
+    changes: list[str]
+    grocery: list[str]
+
+
+HELP_LINES: dict[str, str] = {
+    "chef": "I did not catch that. Ask me what to cook tonight or what to use first, "
+    "or tell me foods you love or will not eat.",
+    "nutritionist": "I did not catch that. Ask how your day is going, or set a goal like 120 g of protein "
+    "or 2000 calories.",
+    "bargain_hunter": "I did not catch that. Ask what milk costs, tell me to add eggs to your list, "
+    "or set a budget like $40.",
+}
+
+CONFIRM_LINES: dict[str, str] = {
+    "chef": "Noted! {changes}. I will cook around it next time we plan.",
+    "nutritionist": "Updated. {changes}. I will hold every meal to it.",
+    "bargain_hunter": "Done. {changes}. Watch me make it stretch.",
+}
+
+_PRICE_QUESTION = re.compile(
+    r"(?:how much (?:is|are|for|does)|price of|cost of|where (?:can i|do i|to) (?:buy|get|find)|cheapest)\s+"
+    r"(?:the |some |a |an )?([a-z][a-z ]*?)(?: cost| costs)?(?:[?.!]|$)"
+)
+
+
+def _chef_answer(text: str, facts: ChatFacts) -> str | None:
+    if re.search(r"expir|use first|going bad|spoil|use soon", text):
+        if not facts.use_soon:
+            return "Nothing in your fridge is close to spoiling. Lovely."
+        return f"Use the {', '.join(facts.use_soon[:4])} first. They are on the clock."
+    if re.search(r"cook|make|eat|tonight|dinner|recipe|hungry", text):
+        if not facts.next_dish:
+            return "Scan your fridge and I will have dinner planned in a minute."
+        return f"Tonight I would make {facts.next_dish}. It takes {facts.next_dish_minutes} minutes."
+    return None
+
+
+def _nutritionist_answer(text: str, facts: ChatFacts, goals: Goals) -> str | None:
+    if not re.search(r"how am i|protein|calorie|kcal|left|on track|today|doing|goal", text):
+        return None
+    protein_left = max(0, goals.daily_protein_g - facts.protein_g)
+    calories_left = goals.daily_calories - facts.calories
+    energy = f"{calories_left} kcal left" if calories_left >= 0 else f"{-calories_left} kcal over"
+    return (
+        f"Today you are at {facts.calories} of {goals.daily_calories} kcal and {facts.protein_g} of "
+        f"{goals.daily_protein_g} g protein. That is {energy} and {protein_left} g of protein to go."
+    )
+
+
+def _shopper_answer(text: str, facts: ChatFacts, goals: Goals) -> str | None:
+    asked = _PRICE_QUESTION.search(text)
+    if asked:
+        found = facts.price_of(asked.group(1).strip())
+        if found:
+            return found
+    if re.search(r"budget|spend|cost|total|afford", text):
+        if facts.plan_cost is None:
+            return f"Your budget is ${goals.budget:.2f} a week. Nothing is planned yet, so nothing is spent."
+        left = max(0.0, goals.budget - facts.plan_cost)
+        return f"Your plan costs ${facts.plan_cost:.2f} of your ${goals.budget:.2f} budget. ${left:.2f} stays in reserve."
+    if re.search(r"store|deal|where|shop", text):
+        if facts.store:
+            return f"Your best stop this week is {facts.store}. I priced your whole list there."
+        return "Share your location on the Shop tab and I will compare the stores around you."
+    return None
+
+
+def offline_answer(agent: str, message: str, facts: ChatFacts, goals: Goals) -> str | None:
+    """Answer a question from saved facts. The agent asked goes first, then the other two."""
+    text = " ".join(message.lower().split())
+    answers = {
+        "chef": lambda: _chef_answer(text, facts),
+        "nutritionist": lambda: _nutritionist_answer(text, facts, goals),
+        "bargain_hunter": lambda: _shopper_answer(text, facts, goals),
+    }
+    for name in (agent, *(other for other in answers if other != agent)):
+        answer = answers[name]()
+        if answer:
+            return answer
+    return None
+
+
+def offline_reply(changes: list[str], agent: str = "bargain_hunter") -> str:
     if not changes:
-        return (
-            "I did not catch a change there. Try something like: my budget is $40, "
-            "I do not eat mushrooms, or I love tacos."
-        )
-    return f"Done. {'. '.join(changes)}. Plan again and the whole party will use it."
+        return HELP_LINES[agent]
+    return CONFIRM_LINES[agent].format(changes=". ".join(changes))
 
 
-async def converse(llm: LLM | None, agent: str, message: str, profile: Profile) -> tuple[str, Profile, list[str]]:
-    """One turn of conversation. Returns the agent's reply, the updated profile, and the list of changes."""
+def _offline_outcome(agent: str, message: str, profile: Profile, facts: ChatFacts) -> ChatOutcome:
+    draft = offline_draft(message)
+    updated, changes = apply_draft(profile, draft)
+    grocery = _foods(draft.add_to_grocery)
+    if changes or grocery:
+        reply = offline_reply(changes, agent) if changes else "On it."
+    else:
+        reply = offline_answer(agent, message, facts, profile.goals) or HELP_LINES[agent]
+    return ChatOutcome(reply=reply, profile=updated, changes=changes, grocery=grocery)
+
+
+async def converse_full(
+    llm: LLM | None, agent: str, message: str, profile: Profile, facts: ChatFacts | None = None
+) -> ChatOutcome:
+    """One turn of conversation, including any items the player asked to put on the grocery list."""
+    facts = facts or ChatFacts()
     draft: ChatDraft | None = None
     if llm is not None:
-        prompt = f"The player's current preferences:\n{_profile_lines(profile)}\n\nThe player says:\n{message}"
+        prompt = (
+            f"The player's current preferences:\n{_profile_lines(profile)}\n\n"
+            f"What you know right now: next planned dinner: {facts.next_dish or 'none'}; "
+            f"food to use soon: {', '.join(facts.use_soon) or 'none'}; eaten today: {facts.calories} kcal and "
+            f"{facts.protein_g} g protein; chosen store: {facts.store or 'none'}.\n\n"
+            f"The player says:\n{message}"
+        )
         try:
             draft = await llm.generate(
                 system=f"{PERSONAS[agent]}\n\n{CHAT_RULES}", prompt=prompt, schema=ChatDraft, temperature=0.6
@@ -197,8 +321,13 @@ async def converse(llm: LLM | None, agent: str, message: str, profile: Profile) 
         except LLMError:
             logger.warning("Chat fell back to the rule-based reader.")
     if draft is None:
-        updated, changes = apply_draft(profile, offline_draft(message))
-        return offline_reply(changes), updated, changes
+        return _offline_outcome(agent, message, profile, facts)
     updated, changes = apply_draft(profile, draft)
-    reply = " ".join(draft.reply.split())[:MAX_REPLY_CHARS] or offline_reply(changes)
-    return reply, updated, changes
+    reply = " ".join(draft.reply.split())[:MAX_REPLY_CHARS] or offline_reply(changes, agent)
+    return ChatOutcome(reply=reply, profile=updated, changes=changes, grocery=_foods(draft.add_to_grocery))
+
+
+async def converse(llm: LLM | None, agent: str, message: str, profile: Profile) -> tuple[str, Profile, list[str]]:
+    """One turn of conversation. Returns the reply, the updated profile, and the list of changes."""
+    outcome = await converse_full(llm, agent, message, profile)
+    return outcome.reply, outcome.profile, outcome.changes

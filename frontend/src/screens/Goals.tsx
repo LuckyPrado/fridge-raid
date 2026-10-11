@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 
 import type { Kitchen } from "../hooks/useKitchen";
 import { capitalize } from "../lib/food";
 import { filledSegments, nextDish } from "../lib/plan";
 import type { Go } from "../nav";
 import { PixelEmoji } from "../pixel/PixelEmoji";
-import { AgentBubble, Chip, Icon, IconButton, ScreenHeader, SectionTitle, SegBar } from "../ui/kit";
+import type { MealEstimate } from "../types";
+import { AgentBubble, Button, Chip, Icon, IconButton, ScreenHeader, SectionTitle, SegBar } from "../ui/kit";
 import { GoalsSheet, LogSheet } from "./GoalSheets";
 
 const ENERGY_SEGMENTS = 10;
@@ -30,6 +31,29 @@ function dateTitle(day: string): string {
 export function Goals({ kitchen, go }: GoalsProps) {
   const { day, profile, saved, today, setWater, saveProfile, logFood } = kitchen;
   const [openSheet, setOpenSheet] = useState<OpenSheet>(null);
+  const [estimate, setEstimate] = useState<MealEstimate | null>(null);
+  const [isReading, setIsReading] = useState(false);
+  const mealInput = useRef<HTMLInputElement>(null);
+
+  const handleMealPhoto = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    setIsReading(true);
+    const result = await kitchen.estimateMeal(file);
+    setIsReading(false);
+    if (result) {
+      setEstimate(result);
+      setOpenSheet("log");
+    }
+  };
+
+  const closeSheet = () => {
+    setOpenSheet(null);
+    setEstimate(null);
+  };
   const goals = profile.goals;
   const energyLeft = goals.daily_calories - day.calories;
   const upcoming = nextDish(saved);
@@ -107,6 +131,10 @@ export function Goals({ kitchen, go }: GoalsProps) {
         title="Today's fuel"
         aside={<button type="button" className="text-link" onClick={() => setOpenSheet("log")}>+ Log food</button>}
       />
+      <Button tone="butter" icon="image" isBlock disabled={isReading} onClick={() => mealInput.current?.click()}>
+        {isReading ? "Reading your meal" : "Snap a meal to log it"}
+      </Button>
+      <input ref={mealInput} className="visually-hidden" type="file" accept="image/*" capture="environment" onChange={handleMealPhoto} tabIndex={-1} />
       {day.entries.length === 0 && <p className="fineprint">Nothing logged yet today. Cook a planned recipe or log food by hand.</p>}
       <ul className="fuel">
         {day.entries.map((entry) => (
@@ -143,8 +171,8 @@ export function Goals({ kitchen, go }: GoalsProps) {
       </div>
       <p className="fineprint">Self-set goals and estimated nutrition. This is not medical advice.</p>
 
-      {openSheet === "goals" && <GoalsSheet profile={profile} onSave={saveProfile} onStartOver={kitchen.startOver} onClose={() => setOpenSheet(null)} />}
-      {openSheet === "log" && <LogSheet onSave={logFood} onClose={() => setOpenSheet(null)} />}
+      {openSheet === "goals" && <GoalsSheet profile={profile} onSave={saveProfile} onStartOver={kitchen.startOver} demo={kitchen.demo} onDemo={kitchen.setDemo} onClose={() => setOpenSheet(null)} />}
+      {openSheet === "log" && <LogSheet key={estimate?.name ?? "manual"} estimate={estimate} onSave={logFood} onClose={closeSheet} />}
     </div>
   );
 }

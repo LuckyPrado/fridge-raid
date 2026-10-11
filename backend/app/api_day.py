@@ -8,8 +8,9 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel
 
-from app import tracker
-from app.chat import converse
+from app import demo, grocery, tracker
+from app.chat import ChatFacts, converse_full
+from app.optimizer import at_risk_items
 from app.api import WRITE_REQUESTS_PER_MINUTE, Envelope
 from app.deals import store_deals
 from app.places import PlacesError, find_stores
@@ -18,6 +19,12 @@ from app.schemas import (
     ChatReply,
     ChatRequest,
     CookRequest,
+    DemoState,
+    DemoSwitch,
+    GroceryAdd,
+    GroceryList,
+    Quote,
+    QuoteRequest,
     DaySummary,
     InventoryItem,
     LogRequest,
@@ -176,15 +183,108 @@ def forget_location(services: Services = Depends(get_services)) -> Envelope[Stor
     return Envelope(data=_store_board(services))
 
 
+def _chat_facts(services: Services, day: str | None) -> ChatFacts:
+    repository = services.repository
+    saved = tracker.load_plan(repository)
+    upcoming = tracker.next_dish(saved)
+    stores = tracker.active_stores(repository, services.stores)
+    risky = at_risk_items(repository.list_items(), services.catalog)
+    summary = tracker.day_summary(repository, day) if day else None
+
+    def price_of(name: str) -> str | None:
+        quote = grocery.best_quote(name, stores, services.catalog)
+        if quote is None or not quote.known:
+            return None
+        deal = f", down from ${quote.list_price:.2f}" if quote.price < quote.list_price else ""
+        return f"{quote.name.capitalize()} is cheapest at {quote.store}: ${quote.price:.2f} for {grocery.pack_label(quote)}{deal}."
+
+    return ChatFacts(
+        next_dish=upcoming.name if upcoming else "",
+        next_dish_minutes=upcoming.minutes if upcoming else 0,
+        use_soon=tuple(sorted(entry.name for entry in risky.values())),
+        calories=summary.calories if summary else 0,
+        protein_g=summary.protein_g if summary else 0,
+        plan_cost=saved.plan.total_cost if saved.plan else None,
+        store=saved.plan.store.name if saved.plan and saved.plan.store else "",
+        price_of=price_of,
+    )
+
+
+def _chat_turn(services: Services, request: ChatRequest, day: str | None) -> tuple[Profile, ChatFacts]:
+    return tracker.load_profile(services.repository), _chat_facts(services, day)
+
+
+def _add_to_grocery(services: Services, names: list[str]) -> list[str]:
+    """Put the asked-for items on the grocery list. Returns one line per item added."""
+    stores = tracker.active_stores(services.repository, services.stores)
+    lines = []
+    for name in names:
+        _, item = grocery.add_item(services.repository, name, stores, services.catalog)
+        if item is not None:
+            where = f" · ${item.price:.2f} at {item.store}" if item.store else ""
+            lines.append(f"On your list: {item.name}{where}")
+    return lines
+
+
 @router.post(
     "/chat",
     response_model=Envelope[ChatReply],
     dependencies=[Depends(rate_limit(CHAT_REQUESTS_PER_MINUTE))],
 )
-async def chat(request: ChatRequest, services: Services = Depends(get_services)) -> Envelope[ChatReply]:
-    """Tell an agent what you want. It answers and updates your saved preferences."""
-    profile = await asyncio.to_thread(tracker.load_profile, services.repository)
-    reply, updated, changes = await converse(services.llm, request.agent, request.message, profile)
-    if changes:
-        await asyncio.to_thread(tracker.save_profile, services.repository, updated)
-    return Envelope(data=ChatReply(agent=request.agent, reply=reply, profile=updated, changes=tuple(changes)))
+async def chat(
+    request: ChatRequest, today: str | None = Query(default=None, pattern=DAY_PATTERN),
+    services: Services = Depends(get_services),
+) -> Envelope[ChatReply]:
+    """Tell an agent what you want, or ask it a question. It answers and updates your saved preferences."""
+    day = _checked_day(today) if today else None
+    profile, facts = await asyncio.to_thread(_chat_turn, services, request, day)
+    is_demo = await asyncio.to_thread(demo.is_on, services.repository)
+    outcome = await converse_full(None if is_demo else services.llm, request.agent, request.message, profile, facts)
+    if outcome.changes:
+        await asyncio.to_thread(tracker.save_profile, services.repository, outcome.profile)
+    added = await asyncio.to_thread(_add_to_grocery, services, outcome.grocery) if outcome.grocery else []
+    reply = outcome.reply
+    if outcome.grocery and not added:
+        reply = f"{reply} That is already on your list."
+    return Envelope(
+        data=ChatReply(
+            agent=request.agent, reply=reply, profile=outcome.profile, changes=(*outcome.changes, *added)
+        )
+    )
+
+
+@router.post("/quote", response_model=Envelope[list[Quote]])
+def quote(request: QuoteRequest, services: Services = Depends(get_services)) -> Envelope[list[Quote]]:
+    """The best store and price for each named item, among the stores the Shopper is using."""
+    stores = tracker.active_stores(services.repository, services.stores)
+    return Envelope(data=grocery.quotes_for(request.names, stores, services.catalog))
+
+
+@router.get("/grocery", response_model=Envelope[GroceryList])
+def get_grocery(services: Services = Depends(get_services)) -> Envelope[GroceryList]:
+    return Envelope(data=grocery.load_list(services.repository))
+
+
+@router.put("/grocery", response_model=Envelope[GroceryList], dependencies=[write_limit])
+def put_grocery(payload: GroceryList, services: Services = Depends(get_services)) -> Envelope[GroceryList]:
+    return Envelope(data=grocery.save_list(services.repository, payload))
+
+
+@router.post("/grocery", response_model=Envelope[GroceryList], dependencies=[write_limit])
+def add_grocery(payload: GroceryAdd, services: Services = Depends(get_services)) -> Envelope[GroceryList]:
+    """Price one item at the best store and add it to the list."""
+    stores = tracker.active_stores(services.repository, services.stores)
+    updated, _ = grocery.add_item(services.repository, payload.name, stores, services.catalog)
+    return Envelope(data=updated)
+
+
+@router.get("/demo", response_model=Envelope[DemoState])
+def get_demo(services: Services = Depends(get_services)) -> Envelope[DemoState]:
+    return Envelope(data=demo.state(services.repository))
+
+
+@router.put("/demo", response_model=Envelope[DemoState], dependencies=[write_limit])
+def put_demo(switch: DemoSwitch, services: Services = Depends(get_services)) -> Envelope[DemoState]:
+    """Turn demo mode on or off. On: no live model calls, and scans replay the latest recording."""
+    demo.set_on(services.repository, switch.on)
+    return Envelope(data=demo.state(services.repository))

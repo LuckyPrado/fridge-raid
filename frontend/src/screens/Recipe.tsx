@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { Kitchen } from "../hooks/useKitchen";
+import { api } from "../lib/api";
 import { amountLabel, capitalize, money, packLabel, plural } from "../lib/food";
 import { cartLineFor, checkIngredients, dishesUsing, readiness, type IngredientCheck } from "../lib/plan";
 import type { Go } from "../nav";
-import type { CartLine, Dish } from "../types";
+import type { CartLine, Dish, Quote } from "../types";
 import { AgentBubble, Button, Chip, Icon, ScreenHeader, SectionTitle } from "../ui/kit";
 import { DishArt } from "./Chef";
 
@@ -49,11 +50,54 @@ function BuyCard({ line, dish, dishes }: { line: CartLine; dish: Dish; dishes: r
   );
 }
 
+type WhereToBuyProps = {
+  quote: Quote;
+  isListed: boolean;
+  onAdd: () => void;
+};
+
+/** A missing ingredient with the best store the Shopper found for it. */
+function WhereToBuy({ quote, isListed, onAdd }: WhereToBuyProps) {
+  const isOnSale = quote.price < quote.list_price;
+  return (
+    <div className="buy px-box px-butter">
+      <Icon name="pin" />
+      <div className="buy-text">
+        <strong>{`${capitalize(quote.name)} · ${money(quote.price)} at ${quote.store}`}</strong>
+        <small>{`${quote.distance_mi} mi away${isOnSale ? ` · on sale, was ${money(quote.list_price)}` : ""}`}</small>
+      </div>
+      {isListed ? (
+        <span className="buy-flag">On your list</span>
+      ) : (
+        <Button size="sm" tone="paper" onClick={onAdd}>Add to list</Button>
+      )}
+    </div>
+  );
+}
+
 export function Recipe({ kitchen, dishId, go, notify }: RecipeProps) {
   const { saved, inventory, day, profile, cook } = kitchen;
   const [isCooking, setIsCooking] = useState(false);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
   const dishes = saved.plan?.dishes ?? [];
   const dish = dishes.find((entry) => entry.id === dishId);
+
+  // Ask the Shopper where to get whatever this recipe is still missing. It changes as other meals use food up.
+  const missingKey = dish && !saved.cooked.includes(dish.id) ? readiness(checkIngredients(dish, inventory)).toBuy.join("|") : "";
+  useEffect(() => {
+    if (!missingKey) {
+      setQuotes([]);
+      return;
+    }
+    let isCancelled = false;
+    api
+      .quote(missingKey.split("|"))
+      .then((found) => !isCancelled && setQuotes(found))
+      .catch(() => !isCancelled && setQuotes([]));
+    return () => {
+      isCancelled = true;
+    };
+  }, [missingKey, kitchen.stores]);
 
   if (!dish || !saved.plan) {
     return (
@@ -113,6 +157,19 @@ export function Recipe({ kitchen, dishId, go, notify }: RecipeProps) {
         ))}
       </ul>
       {!isCooked && toBuy.map((line) => <BuyCard key={line.name} line={line} dish={dish} dishes={dishes} />)}
+      {!isCooked && quotes.length > 0 && (
+        <>
+          <SectionTitle title="Where to get what is missing" aside={plural(quotes.length, "item")} />
+          {quotes.map((quote) => (
+            <WhereToBuy
+              key={quote.name}
+              quote={quote}
+              isListed={kitchen.grocery.some((item) => item.name === quote.name)}
+              onAdd={() => void kitchen.addGrocery(quote.name)}
+            />
+          ))}
+        </>
+      )}
 
       <AgentBubble agent="nutritionist">{coach}</AgentBubble>
 
