@@ -73,6 +73,13 @@ The dev server listens on your local network. With the phone on the same Wi-Fi, 
 
 For HTTPS, run `npm run dev:https` instead and open `https://<laptop-ip>:5443`. The certificate is self-signed, so the phone shows a warning once. Choose to continue.
 
+iPhones drop the connection unless the certificate names the laptop's own address. Make one for your address before starting, replacing the IP:
+
+```bash
+cd frontend && mkdir -p .cert
+openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 365 -keyout .cert/key.pem -out .cert/cert.pem \n  -subj "/CN=Fridge Raid Dev" -addext "subjectAltName=IP:192.168.1.20,IP:127.0.0.1,DNS:localhost" \n  -addext "extendedKeyUsage=serverAuth"
+```
+
 Some venue networks block device-to-device traffic. In that case connect the laptop to the phone's hotspot, or use the deployed site.
 
 ### Configuration

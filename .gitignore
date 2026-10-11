@@ -29,3 +29,6 @@ Thumbs.db
 
 # test output
 frontend/e2e/screenshots/
+
+# local dev certificates
+.cert/
