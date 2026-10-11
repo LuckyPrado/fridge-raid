@@ -48,6 +48,7 @@ def _save_with(
             "waste_value_saved": min(saved_value, plan.waste_value_total),
         }
     )
+    # The cart was re-priced against the fridge, so anything bought earlier is no longer on it.
     result = SavedPlan(plan=updated, cooked=cooked)
     repository.put_doc(tracker.PLAN_KEY, result.model_dump_json())
     return result

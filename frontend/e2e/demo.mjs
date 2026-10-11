@@ -143,7 +143,15 @@ await noSidewaysScroll("shop");
 await page.getByRole("button", { name: /View my \$[\d.]+ shopping plan/ }).click();
 await page.getByRole("heading", { name: "Your shopping loot" }).waitFor();
 await page.getByRole("checkbox").first().click();
+await page.getByText("Bought · now in your fridge").first().waitFor();
 check(await page.getByRole("checkbox", { checked: true }).count() === 1, "plan: checking an item did not stick");
+await page.getByRole("button", { name: /I bought the other \d+ items?/ }).click();
+await page.getByRole("button", { name: "All bought · back to recipes" }).click();
+await page.getByRole("heading", { name: "Made for your fridge" }).waitFor();
+check(await page.getByText(/extras? to buy/).count() === 0, "chef: recipes still list extras after everything was bought");
+await tab("Shop").click();
+await page.getByRole("button", { name: /View my \$[\d.]+ shopping plan/ }).click();
+await page.getByRole("heading", { name: "Your shopping loot" }).waitFor();
 await shot("11-plan");
 await noSidewaysScroll("plan");
 

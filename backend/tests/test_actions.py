@@ -155,3 +155,42 @@ def test_the_nutritionist_logs_water_and_the_shopper_edits_the_list(client: Test
     assert client.get(f"/api/day/{TODAY}").json()["data"]["water"] == 3
     assert removed["changes"] == ["Off your list: lemon"]
     assert [item["name"] for item in client.get("/api/grocery").json()["data"]["items"]] == ["oats"]
+
+
+@pytest.mark.integration
+def test_buying_the_shopping_list_stocks_the_fridge_once(client: TestClient) -> None:
+    plan = _plan(client)
+    names = [line["name"] for line in plan["cart"]]
+    before = {item["name"] for item in client.get("/api/inventory").json()["data"]["items"]}
+
+    first = client.post("/api/plan/bought", json={"names": names}).json()["data"]
+    again = client.post("/api/plan/bought", json={"names": names}).json()["data"]
+    stocked = {item["name"]: item for item in first["items"]}
+
+    assert names and not set(names) <= before, "the dorm plan needs groceries the fridge lacks"
+    assert set(names) <= set(stocked)
+    line = plan["cart"][0]
+    assert stocked[line["name"]]["quantity"] >= line["packs"] * line["pack_size"]
+    assert first["saved"]["bought"] == names
+    assert len(again["items"]) == len(first["items"]), "a second confirmation must not add the food again"
+    assert client.get("/api/plan").json()["data"]["bought"] == names
+    assert client.post("/api/plan/bought", json={"names": []}).status_code == 422
+
+
+@pytest.mark.integration
+def test_buying_with_no_plan_changes_nothing(client: TestClient) -> None:
+    result = client.post("/api/plan/bought", json={"names": ["lemon"]}).json()["data"]
+
+    assert result["items"] == [] and result["saved"]["plan"] is None
+
+
+@pytest.mark.integration
+def test_buying_a_grocery_list_item_moves_it_into_the_fridge(client: TestClient) -> None:
+    client.post("/api/grocery", json={"name": "lemon"})
+
+    result = client.post("/api/grocery/bought", json={"name": "lemon"}).json()["data"]
+    unknown = client.post("/api/grocery/bought", json={"name": "oats"}).json()["data"]
+
+    assert [item["name"] for item in result["items"]] == ["lemon"]
+    assert result["grocery"]["items"] == []
+    assert len(unknown["items"]) == 1, "an item that was not on the list is not stocked"

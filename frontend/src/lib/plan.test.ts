@@ -128,11 +128,11 @@ describe("plan helpers", () => {
   };
 
   it("returns the first dish that is not cooked yet", () => {
-    const saved: SavedPlan = { plan, cooked: ["d1"] };
+    const saved: SavedPlan = { plan, cooked: ["d1"], bought: [] };
 
     expect(nextDish(saved)?.id).toBe("d2");
-    expect(nextDish({ plan, cooked: ["d1", "d2"] })).toBeNull();
-    expect(nextDish({ plan: null, cooked: [] })).toBeNull();
+    expect(nextDish({ plan, cooked: ["d1", "d2"], bought: [] })).toBeNull();
+    expect(nextDish({ plan: null, cooked: [], bought: [] })).toBeNull();
   });
 
   it("tags dinners with weekdays that wrap around the week", () => {

@@ -9,6 +9,7 @@ import type {
   SavedPlan,
   StatusInfo,
   AgentId,
+  BoughtResult,
   ChatReply,
   DemoState,
   GroceryItem,
@@ -104,6 +105,8 @@ export const api = {
     (await request<{ items: GroceryItem[] }>("/api/grocery", json("POST", { name }))).items,
   saveGrocery: async (items: GroceryItem[]): Promise<GroceryItem[]> =>
     (await request<{ items: GroceryItem[] }>("/api/grocery", json("PUT", { items }))).items,
+  bought: (names: string[]): Promise<BoughtResult> => request("/api/plan/bought", json("POST", { names })),
+  groceryBought: (name: string): Promise<BoughtResult> => request("/api/grocery/bought", json("POST", { name })),
   demo: (): Promise<DemoState> => request("/api/demo"),
   setDemo: (on: boolean): Promise<DemoState> => request("/api/demo", json("PUT", { on })),
 };

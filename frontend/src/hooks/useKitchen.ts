@@ -25,7 +25,7 @@ import type {
 } from "../types";
 
 const NO_THREAT: Threat = { waste_value_total: 0, at_risk: [] };
-const NO_PLAN: SavedPlan = { plan: null, cooked: [] };
+const NO_PLAN: SavedPlan = { plan: null, cooked: [], bought: [] };
 const NO_PROGRESS: Progress = { xp: 0, level: 1, streak: 0, meals_cooked: 0, items_rescued: 0 };
 
 export const DEFAULT_PROFILE: Profile = {
@@ -100,6 +100,10 @@ export interface Kitchen {
   grocery: GroceryItem[];
   addGrocery: (name: string) => Promise<void>;
   removeGrocery: (name: string) => Promise<void>;
+  /** The player bought these shopping lines. They go into the fridge so recipes can use them. */
+  markBought: (names: string[]) => Promise<void>;
+  /** The player bought one item from their own grocery list. */
+  gotGrocery: (name: string) => Promise<void>;
   demo: DemoState;
   setDemo: (on: boolean) => Promise<void>;
 }
@@ -415,6 +419,29 @@ export function useKitchen(): Kitchen {
     }
   }, []);
 
+  const markBought = useCallback(async (names: string[]) => {
+    if (names.length === 0) {
+      return;
+    }
+    try {
+      const result = await api.bought(names);
+      setInventory(result.items);
+      setSaved(result.saved);
+    } catch (error: unknown) {
+      setProblem(`That was not saved. ${errorMessage(error)}`);
+    }
+  }, []);
+
+  const gotGrocery = useCallback(async (name: string) => {
+    try {
+      const result = await api.groceryBought(name);
+      setInventory(result.items);
+      setGrocery(result.grocery.items);
+    } catch (error: unknown) {
+      setProblem(`That was not saved. ${errorMessage(error)}`);
+    }
+  }, []);
+
   const setDemo = useCallback(async (on: boolean) => {
     try {
       setDemoState(await api.setDemo(on));
@@ -459,6 +486,8 @@ export function useKitchen(): Kitchen {
     grocery,
     addGrocery,
     removeGrocery,
+    markBought,
+    gotGrocery,
     demo,
     setDemo,
   };

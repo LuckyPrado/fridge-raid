@@ -131,6 +131,14 @@ export interface Profile {
 export interface SavedPlan {
   plan: WeekPlan | null;
   cooked: string[];
+  /** Shopping lines already bought. That food is in the fridge. */
+  bought: string[];
+}
+
+export interface BoughtResult {
+  items: InventoryItem[];
+  saved: SavedPlan;
+  grocery: { items: GroceryItem[] };
 }
 
 export interface LogEntry {

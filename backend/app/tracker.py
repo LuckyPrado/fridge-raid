@@ -13,9 +13,9 @@ from typing import Sequence
 
 from pydantic import ValidationError
 
-from app.catalog import Catalog
+from app.catalog import Catalog, normalize_name
 from app.deals import Store, stores_from_places
-from app.inventory_ops import cook_dish, new_item_id
+from app.inventory_ops import cook_dish, new_item_id, stock_purchase
 from app.optimizer import at_risk_items, rescued
 from app.repository import PLACES_CACHE_PREFIX, Repository, utc_now_iso
 from app.schemas import (
@@ -240,6 +240,26 @@ def _cook(repository: Repository, catalog: Catalog, dish_id: str, day: str) -> C
         rescued=names,
         xp=XP_PER_MEAL + XP_PER_RESCUE * len(names),
     )
+
+
+def mark_bought(repository: Repository, catalog: Catalog, names: Sequence[str]) -> tuple[list[InventoryItem], SavedPlan]:
+    """Put bought shopping lines into the fridge and tick them off the plan. A line is only stocked once."""
+    saved = load_plan(repository)
+    inventory = repository.list_items()
+    if saved.plan is None:
+        return inventory, saved
+    wanted = {normalize_name(name) for name in names}
+    newly = [
+        line for line in saved.plan.cart if normalize_name(line.name) in wanted and line.name not in saved.bought
+    ]
+    if not newly:
+        return inventory, saved
+    for line in newly:
+        inventory = stock_purchase(inventory, catalog, line.name, line.packs)
+    updated = saved.model_copy(update={"bought": (*saved.bought, *(line.name for line in newly))})
+    repository.replace_items(inventory)
+    repository.put_doc(PLAN_KEY, updated.model_dump_json())
+    return inventory, updated
 
 
 def _streak(days: list[str], today: str) -> int:

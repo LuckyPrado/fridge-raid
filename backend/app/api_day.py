@@ -13,6 +13,7 @@ from app.chat import ChatFacts, converse_full
 from app.agents.chef import matches_favorite
 from app.catalog import normalize_name
 from app.optimizer import at_risk_items
+from app.inventory_ops import stock_purchase
 from app.replan import PlanFull, add_dish, remove_dish
 from app.api import WRITE_REQUESTS_PER_MINUTE, Envelope
 from app.deals import store_deals
@@ -20,6 +21,8 @@ from app.places import PlacesError, find_stores
 from app.ratelimit import rate_limit
 from app.schemas import (
     MAX_WATER_GLASSES,
+    BoughtRequest,
+    BoughtResult,
     ChatReply,
     ChatRequest,
     CookRequest,
@@ -324,6 +327,28 @@ def add_grocery(payload: GroceryAdd, services: Services = Depends(get_services))
     stores = tracker.active_stores(services.repository, services.stores)
     updated, _ = grocery.add_item(services.repository, payload.name, stores, services.catalog)
     return Envelope(data=updated)
+
+
+@router.post("/plan/bought", response_model=Envelope[BoughtResult], dependencies=[write_limit])
+def plan_bought(request: BoughtRequest, services: Services = Depends(get_services)) -> Envelope[BoughtResult]:
+    """The player bought these shopping lines: stock the fridge so recipes see the ingredients."""
+    items, saved = tracker.mark_bought(services.repository, services.catalog, request.names)
+    return Envelope(data=BoughtResult(items=tuple(items), saved=saved, grocery=grocery.load_list(services.repository)))
+
+
+@router.post("/grocery/bought", response_model=Envelope[BoughtResult], dependencies=[write_limit])
+def grocery_bought(payload: GroceryAdd, services: Services = Depends(get_services)) -> Envelope[BoughtResult]:
+    """The player bought one item from their own grocery list: stock the fridge and take it off the list."""
+    repository = services.repository
+    current = grocery.load_list(repository)
+    wanted = normalize_name(payload.name)
+    kept = tuple(item for item in current.items if normalize_name(item.name) != wanted)
+    items = repository.list_items()
+    if len(kept) < len(current.items):
+        items = stock_purchase(items, services.catalog, payload.name)
+        repository.replace_items(items)
+        current = grocery.save_list(repository, GroceryList(items=kept))
+    return Envelope(data=BoughtResult(items=tuple(items), saved=tracker.load_plan(repository), grocery=current))
 
 
 @router.get("/demo", response_model=Envelope[DemoState])

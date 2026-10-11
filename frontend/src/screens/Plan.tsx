@@ -5,43 +5,16 @@ import { capitalize, listOf, money, packLabel, plural } from "../lib/food";
 import { checkIngredients, dayTag, dishesUsing, filledSegments, isDeal, readiness } from "../lib/plan";
 import type { Go } from "../nav";
 import { PixelEmoji } from "../pixel/PixelEmoji";
-import type { Dish, InventoryItem, WeekPlan } from "../types";
+import type { Dish, InventoryItem } from "../types";
 import { AgentBubble, Button, Chip, Icon, ScreenHeader, SectionTitle, SegBar } from "../ui/kit";
 
 const BUDGET_SEGMENTS = 10;
-const STORAGE_KEY = "fridge-raid:bought";
 const DAY_TONES = ["peach", "mint", "butter"] as const;
 
 type PlanProps = {
   kitchen: Kitchen;
   go: Go;
 };
-
-interface BoughtRecord {
-  signature: string;
-  names: string[];
-}
-
-function signatureOf(plan: WeekPlan): string {
-  return `${plan.cart.map((line) => `${line.name}x${line.packs}`).join("|")}@${plan.total_cost}`;
-}
-
-function loadBought(signature: string): string[] {
-  try {
-    const record = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null") as BoughtRecord | null;
-    return record && record.signature === signature && Array.isArray(record.names) ? record.names : [];
-  } catch {
-    return [];
-  }
-}
-
-function storeBought(record: BoughtRecord): void {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
-  } catch {
-    // Private browsing can block storage. The checklist still works for this visit.
-  }
-}
 
 function dinnerNote(dish: Dish, inventory: readonly InventoryItem[], isCooked: boolean): string {
   if (isCooked) {
@@ -57,8 +30,8 @@ function dinnerNote(dish: Dish, inventory: readonly InventoryItem[], isCooked: b
 export function Plan({ kitchen, go }: PlanProps) {
   const { saved, inventory } = kitchen;
   const plan = saved.plan;
-  const signature = plan ? signatureOf(plan) : "";
-  const [bought, setBought] = useState<string[]>(() => loadBought(signature));
+  const bought = saved.bought;
+  const [isSaving, setIsSaving] = useState(false);
 
   if (!plan) {
     return (
@@ -70,11 +43,12 @@ export function Plan({ kitchen, go }: PlanProps) {
     );
   }
 
-  const update = (names: string[]) => {
-    setBought(names);
-    storeBought({ signature, names });
+  const buy = async (names: string[]) => {
+    setIsSaving(true);
+    await kitchen.markBought(names);
+    setIsSaving(false);
   };
-  const toggle = (name: string) => update(bought.includes(name) ? bought.filter((entry) => entry !== name) : [...bought, name]);
+  const remaining = plan.cart.filter((line) => !bought.includes(line.name)).map((line) => line.name);
   const isAllBought = plan.cart.length > 0 && plan.cart.every((line) => bought.includes(line.name));
   const reserve = Math.max(0, plan.budget - plan.total_cost);
   const listSaving = plan.cart.reduce((sum, line) => sum + Math.max(0, line.list_cost - line.cost), 0);
@@ -136,11 +110,11 @@ export function Plan({ kitchen, go }: PlanProps) {
               const isBought = bought.includes(entry.name);
               return (
                 <li key={entry.name}>
-                  <button type="button" className={`loot-row ${isBought ? "is-bought" : ""}`} role="checkbox" aria-checked={isBought} onClick={() => toggle(entry.name)}>
+                  <button type="button" className={`loot-row ${isBought ? "is-bought" : ""}`} role="checkbox" aria-checked={isBought} disabled={isBought || isSaving} onClick={() => void buy([entry.name])}>
                     <span className="checkbox">{isBought && <Icon name="check" scale={1.5} />}</span>
                     <span className="loot-text">
                       <strong>{capitalize(entry.name)} <small>{packLabel(entry.packs, entry.pack_size, entry.unit, entry.name)}</small></strong>
-                      <small>{dishesUsing(entry, plan.dishes).join(" + ")}</small>
+                      <small>{isBought ? "Bought · now in your fridge" : dishesUsing(entry, plan.dishes).join(" + ")}</small>
                     </span>
                     <span className="loot-price">
                       <b>{money(entry.cost)}</b>
@@ -164,11 +138,11 @@ export function Plan({ kitchen, go }: PlanProps) {
       </div>
 
       {plan.cart.length > 0 && (
-        <Button size="lg" icon={isAllBought ? "next" : "check"} isBlock onClick={isAllBought ? () => go({ name: "chef" }) : () => update(plan.cart.map((entry) => entry.name))}>
-          {isAllBought ? "All bought · back to recipes" : `Check off all ${plural(plan.cart.length, "item")}`}
+        <Button size="lg" icon={isAllBought ? "next" : "check"} isBlock disabled={isSaving} onClick={isAllBought ? () => go({ name: "chef" }) : () => void buy(remaining)}>
+          {isAllBought ? "All bought · back to recipes" : `I bought ${remaining.length === plan.cart.length ? "all" : "the other"} ${plural(remaining.length, "item")}`}
         </Button>
       )}
-      <p className="fineprint">Sample plan and prices before tax. Confirm prices before buying.</p>
+      <p className="fineprint">Tick an item once you have bought it. It goes into your fridge so the Chef can cook with it. Sample prices before tax.</p>
     </div>
   );
 }

@@ -92,7 +92,7 @@ function shopperLine(plan: WeekPlan | null, picked: StoreDeals, isPlanStore: boo
 }
 
 export function Shop({ kitchen, go, onPlan }: ShopProps) {
-  const { saved, stores, origin, inventory, shareLocation, clearLocation, grocery, addGrocery, removeGrocery } = kitchen;
+  const { saved, stores, origin, inventory, shareLocation, clearLocation, grocery, addGrocery, gotGrocery } = kitchen;
   const [wanted, setWanted] = useState("");
   const plan = saved.plan;
   const [pickedId, setPickedId] = useState<string | null>(null);
@@ -229,7 +229,7 @@ export function Shop({ kitchen, go, onPlan }: ShopProps) {
         <input id="grocery-input" value={wanted} maxLength={60} placeholder="Add milk, eggs, lemons..." autoComplete="off" enterKeyHint="done" onChange={(event) => setWanted(event.target.value)} />
         <Button type="submit" disabled={wanted.trim().length === 0}>Add</Button>
       </form>
-      {grocery.length === 0 && <p className="fineprint">Add anything and I will find the store with the best price for it.</p>}
+      <p className="fineprint">{grocery.length === 0 ? "Add anything and I will find the store with the best price for it." : "Tap the check once you have bought an item. It goes into your fridge."}</p>
       <ul className="loot">
         {grocery.map((item) => (
           <li key={item.name} className="loot-row">
@@ -239,7 +239,7 @@ export function Shop({ kitchen, go, onPlan }: ShopProps) {
               <small>{item.store ? `Best price at ${item.store}` : "No price found"}</small>
             </span>
             <span className="loot-price"><b>{money(item.price)}</b></span>
-            <IconButton icon="check" label={`Got ${item.name}, remove it`} onClick={() => void removeGrocery(item.name)} />
+            <IconButton icon="check" label={`Bought ${item.name}, put it in my fridge`} onClick={() => void gotGrocery(item.name)} />
           </li>
         ))}
       </ul>

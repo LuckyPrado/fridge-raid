@@ -147,6 +147,8 @@ class SavedPlan(Frozen):
 
     plan: WeekPlan | None = None
     cooked: tuple[str, ...] = Field(default=(), max_length=MAX_PLAN_DISHES)
+    # Shopping lines the player has bought. That food is already in the fridge.
+    bought: tuple[str, ...] = Field(default=(), max_length=MAX_CART_LINES)
 
 
 class LogEntry(Frozen):
@@ -268,6 +270,16 @@ class GroceryItem(Frozen):
 
 class GroceryList(Frozen):
     items: tuple[GroceryItem, ...] = Field(default=(), max_length=MAX_GROCERY_ITEMS)
+
+
+class BoughtRequest(BaseModel):
+    names: list[Favorite] = Field(min_length=1, max_length=60)
+
+
+class BoughtResult(Frozen):
+    items: tuple[InventoryItem, ...]
+    saved: SavedPlan
+    grocery: GroceryList
 
 
 class GroceryAdd(BaseModel):
