@@ -5,6 +5,8 @@ import { applyEvent, beginRaid, EVENT_PACE_MS, IDLE_RAID, type RaidState } from 
 import { streamRaid } from "../lib/stream";
 import type { RaidRequest } from "../types";
 
+const LOST_CONNECTION = "The connection dropped before the plan was ready. Try again.";
+
 const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
 export interface RaidControls {
@@ -41,6 +43,12 @@ export function useRaid(): RaidControls {
         if (!fastForward.current) {
           await sleep(EVENT_PACE_MS[event.type]);
         }
+      }
+      if (!current.signal.aborted) {
+        // A stream that ends without a result, such as a dropped connection, must not leave the screen waiting.
+        setRaid((state) =>
+          state.phase === "raiding" ? applyEvent(state, { type: "error", text: LOST_CONNECTION }) : state,
+        );
       }
     } catch (error: unknown) {
       if (!current.signal.aborted) {

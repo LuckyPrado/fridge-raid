@@ -29,20 +29,37 @@ Rules:
 - For ingredient names and units, use the grocery catalog spelling and unit exactly when the item is listed there.
 - Do not list salt, pepper, oil, sugar, or water.
 - "pitch" is one punchy in-character line of at most 20 words. "description" is one plain sentence.
+- "steps" is 3 to 5 short cooking steps, one sentence or two each, in order.
+- When the player lists favorite foods, lean toward them, but never at the cost of wasting expiring food.
 - Make the dishes clearly different from each other."""
 
 AT_RISK_BONUS = 3.0
 IN_STOCK_BONUS = 1.0
 MISSING_PENALTY = 1.5
 ARENA_BONUS = 4.0
+FAVORITE_BONUS = 2.5
 
 
 def _goal_lines(ctx: RaidContext) -> str:
     goals = ctx.goals
+    favorites = ", ".join(" ".join(favorite.split()) for favorite in goals.favorites) or "none given"
     return (
         f"Diet: {goals.diet}. Per serving: at most {goals.max_calories} calories, "
         f"at most {goals.max_sodium_mg} mg sodium, at least {goals.min_protein_g} g protein. "
-        f"Weekly shopping budget: ${goals.budget:.2f}."
+        f"Weekly shopping budget: ${goals.budget:.2f}. Favorite foods: {favorites}."
+    )
+
+
+def matches_favorite(recipe: Dish, favorites: Sequence[str]) -> bool:
+    """True when a favorite food names the dish or one of its ingredients."""
+    wanted = {normalize_name(favorite) for favorite in favorites} - {""}
+    if not wanted:
+        return False
+    title_words = {normalize_name(word) for word in recipe.name.split()}
+    ingredients = {normalize_name(ingredient.name) for ingredient in recipe.ingredients}
+    return any(
+        favorite in title_words or favorite in ingredients or favorite in normalize_name(recipe.name)
+        for favorite in wanted
     )
 
 
@@ -113,6 +130,8 @@ class OfflineChef:
             score += AT_RISK_BONUS if days_left[key] <= RISK_DAYS else IN_STOCK_BONUS
             if key in arena:
                 score += ARENA_BONUS
+        if matches_favorite(recipe, ctx.goals.favorites):
+            score += FAVORITE_BONUS
         return score
 
     def _ranked(self, ctx: RaidContext, exclude: Sequence[str]) -> list[Dish]:

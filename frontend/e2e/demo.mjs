@@ -1,5 +1,6 @@
-// End-to-end walk through the demo script against running dev servers.
+// End-to-end walk through the phone flow against running dev servers.
 // Usage: node e2e/demo.mjs [screenshot-dir]   (needs Chrome installed; servers on 5173 and 8000)
+// The walk expects offline mode (no GEMINI_API_KEY) and resets the saved fridge before it starts.
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { chromium } from "playwright-core";
@@ -16,61 +17,123 @@ const check = (condition, message) => {
 };
 
 const browser = await chromium.launch({ channel: "chrome" });
-const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const context = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 2,
+  isMobile: true,
+  hasTouch: true,
+});
+const page = await context.newPage();
 page.on("console", (message) => message.type() === "error" && problems.push(`console: ${message.text()}`));
 page.on("pageerror", (error) => problems.push(`pageerror: ${error.message}`));
 
+const shot = (name) => page.screenshot({ path: join(shots, `${name}.png`), fullPage: true });
+const noSidewaysScroll = async (label) => {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  check(overflow <= 0, `${label}: page scrolls sideways by ${overflow}px`);
+};
+const tab = (name) => page.getByRole("navigation", { name: "Main" }).getByRole("button", { name });
+
+// Start from an empty fridge so the walk is repeatable.
+await page.request.put(new URL("/api/inventory", APP_URL).href, { data: { items: [] } });
+const now = new Date();
+const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+await page.request.put(new URL(`/api/day/${today}/water`, APP_URL).href, { data: { glasses: 0 } });
+
 await page.goto(APP_URL);
-await page.getByRole("button", { name: /The Dorm Fridge/ }).click();
-await page.getByRole("button", { name: /^spinach/ }).waitFor();
-await page.waitForFunction(() => /\$\d+\.\d\d of food about to spoil/.test(document.body.innerText));
-await page.screenshot({ path: join(shots, "1-fridge.png"), fullPage: true });
+await page.getByRole("heading", { name: "Fridge Raid" }).waitFor();
+await shot("1-home");
+await noSidewaysScroll("home");
 
-// Drag spinach into the arena with the mouse.
-await page.getByRole("button", { name: /^spinach/ }).scrollIntoViewIfNeeded();
-const spinach = await page.getByRole("button", { name: /^spinach/ }).boundingBox();
-const zone = await page.locator(".dropzone").boundingBox();
-await page.mouse.move(spinach.x + spinach.width / 2, spinach.y + spinach.height / 2);
-await page.mouse.down();
-await page.mouse.move(zone.x + zone.width / 2, zone.y + zone.height / 2, { steps: 12 });
-await page.mouse.up();
-check((await page.locator(".chip").count()) === 1, "dragging spinach did not add it to the arena");
+// Scan: the demo camera reads the sample dorm fridge.
+await page.getByRole("button", { name: "Scan my fridge" }).click();
+await page.getByRole("heading", { name: "Fridge scan" }).waitFor();
+await page.getByRole("button", { name: "Dorm Fridge" }).click();
+await shot("2-scan");
+await noSidewaysScroll("scan");
+await page.getByRole("button", { name: "Scan the sample fridge" }).click();
 
-// Click a second ingredient to add it, the keyboard-friendly path.
-await page.getByRole("button", { name: /^egg/ }).click();
-check((await page.locator(".chip").count()) === 2, "clicking egg did not add it to the arena");
-await page.screenshot({ path: join(shots, "2-arena.png"), fullPage: true });
+// Review the stash and fix one amount.
+await page.getByRole("heading", { name: "Look what we found!" }).waitFor();
+await page.getByText(/of food we can save/).waitFor();
+await shot("3-fridge");
+await noSidewaysScroll("fridge");
+await page.getByRole("button", { name: "Edit spinach" }).click();
+await page.getByLabel("Amount").fill("5");
+await page.getByRole("button", { name: "Save changes" }).click();
+await page.getByText("5 cup · produce").waitFor();
 
-await page.getByRole("button", { name: "Start the raid" }).click();
-await page.locator(".stamp--veto").first().waitFor({ timeout: 60_000 });
-await page.screenshot({ path: join(shots, "3-debate.png"), fullPage: true });
+// The party plans. The Nutritionist vetoes one dish and the Chef revises.
+await page.getByRole("button", { name: /Confirm stash/ }).click();
+await page.getByText("Vetoed").first().waitFor({ timeout: 30000 });
+await shot("4-huddle");
+await page.getByRole("button", { name: "Skip to the plan" }).click();
+await page.getByRole("button", { name: /See my \d recipes/ }).waitFor({ timeout: 30000 });
+check(await page.getByText(/Take 2/).count() > 0, "huddle: no revised dish after the veto");
+await shot("5-huddle-done");
+await noSidewaysScroll("huddle");
+await page.getByRole("button", { name: /See my \d recipes/ }).click();
 
-await page.getByRole("button", { name: "Skip to the result" }).click();
-await page.getByRole("button", { name: /Accept plan/ }).waitFor({ timeout: 60_000 });
-await page.waitForTimeout(900);
-await page.screenshot({ path: join(shots, "4-plan.png"), fullPage: true });
-const title = await page.locator(".plan__title").innerText();
-check(/\d meals/.test(title), `unexpected plan title: ${title}`);
-check((await page.locator(".tag--hit").count()) > 0, "no dish dealt damage to the boss");
+// Chef list, then cook the featured recipe.
+await page.getByRole("heading", { name: "Made for your fridge" }).waitFor();
+await shot("6-chef");
+await noSidewaysScroll("chef");
+await page.locator(".feature").click();
+await page.getByRole("heading", { name: "Your cooking quest" }).waitFor();
+await shot("7-recipe");
+await noSidewaysScroll("recipe");
+await page.getByRole("button", { name: /Cook and log it/ }).click();
+await page.getByRole("button", { name: "Cooked and logged" }).waitFor();
+check(await page.getByText(/\+\d+ XP/).count() > 0, "recipe: no XP toast after cooking");
 
-await page.getByRole("button", { name: /Accept plan/ }).click();
-await page.getByText(/Plan accepted/).waitFor();
-check(await page.getByText(/of food saved across \d+ raid/).isVisible(), "raid history did not update");
-await page.screenshot({ path: join(shots, "5-accepted.png"), fullPage: true });
+// Goals: the cooked meal is logged; add water and a snack; set a favorite food.
+await tab("Goals").click();
+await page.getByText("Cooked from your plan").first().waitFor();
+await page.getByRole("button", { name: "Log glass 3" }).click();
+await page.getByText("3 / 8 glasses").waitFor();
+await page.getByRole("button", { name: "+ Log food" }).click();
+await page.getByLabel("What did you eat?").fill("Yogurt bowl");
+await page.getByRole("dialog").getByRole("button", { name: "Log food" }).click();
+await page.getByText("Logged by hand").first().waitFor();
+await page.getByRole("button", { name: "Edit goals", exact: true }).first().click();
+await page.getByLabel("Your name").fill("Alex");
+await page.getByLabel("Favorite foods").fill("tacos, pasta");
+await shot("8-goals-sheet");
+await page.getByRole("button", { name: "Save goals" }).click();
+await page.getByText("Tacos", { exact: true }).waitFor();
+await shot("9-goals");
+await noSidewaysScroll("goals");
 
+// Shop and the shopping plan.
+await tab("Shop").click();
+await page.getByRole("heading", { name: "Good finds, close by" }).waitFor();
+await shot("10-shop");
+await noSidewaysScroll("shop");
+await page.getByRole("button", { name: /View my \$[\d.]+ shopping plan/ }).click();
+await page.getByRole("heading", { name: "Your shopping loot" }).waitFor();
+await page.getByRole("checkbox").first().click();
+check(await page.getByRole("checkbox", { checked: true }).count() === 1, "plan: checking an item did not stick");
+await shot("11-plan");
+await noSidewaysScroll("plan");
+
+// Everything survives a reload.
 await page.reload();
-await page.locator(".sprite").first().waitFor();
-check((await page.locator(".sprite").count()) > 0, "inventory did not survive a reload");
+await page.getByRole("heading", { name: "Fridge Raid" }).waitFor();
+await page.getByText("Hey, Alex").waitFor();
+await tab("Chef").click();
+await page.getByText("Cooked and logged").first().waitFor();
+await tab("Home").click();
+await shot("12-home-after");
 
-await page.setViewportSize({ width: 375, height: 800 });
-await page.waitForTimeout(300);
-await page.screenshot({ path: join(shots, "6-mobile.png"), fullPage: true });
-const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-check(overflow <= 1, `page overflows horizontally by ${overflow}px at 375px wide`);
+// A narrow phone still fits.
+await page.setViewportSize({ width: 320, height: 640 });
+await noSidewaysScroll("home at 320px");
+await tab("Goals").click();
+await noSidewaysScroll("goals at 320px");
 
 await browser.close();
 if (problems.length > 0) {
   process.stderr.write(`FAILED\n${problems.join("\n")}\n`);
   process.exit(1);
 }
-process.stdout.write(`PASSED: demo flow works. Screenshots in ${shots}\n`);
+process.stdout.write(`PASSED. Screenshots in ${shots}\n`);

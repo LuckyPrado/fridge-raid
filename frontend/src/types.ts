@@ -41,6 +41,7 @@ export interface Dish {
   sodium_mg: number;
   minutes: number;
   diets: Diet[];
+  steps: string[];
 }
 
 export interface CartLine {
@@ -49,6 +50,15 @@ export interface CartLine {
   pack_size: number;
   unit: string;
   cost: number;
+  list_cost: number;
+}
+
+export interface StoreInfo {
+  id: string;
+  name: string;
+  neighborhood: string;
+  distance_mi: number;
+  walk_min: number;
 }
 
 export interface WeekPlan {
@@ -60,6 +70,7 @@ export interface WeekPlan {
   waste_value_total: number;
   waste_value_saved: number;
   benched: string[];
+  store: StoreInfo | null;
 }
 
 export interface Goals {
@@ -69,6 +80,9 @@ export interface Goals {
   max_sodium_mg: number;
   min_protein_g: number;
   meals: number;
+  favorites: string[];
+  daily_calories: number;
+  daily_protein_g: number;
 }
 
 export interface RaidRequest {
@@ -104,9 +118,71 @@ export interface RaidStat {
   items_rescued: number;
 }
 
-export interface AcceptResult {
+export interface Profile {
+  name: string;
+  goals: Goals;
+}
+
+export interface SavedPlan {
+  plan: WeekPlan | null;
+  cooked: string[];
+}
+
+export interface LogEntry {
+  id: string;
+  ts: string;
+  day: string;
+  name: string;
+  calories: number;
+  protein_g: number;
+  sodium_mg: number;
+  kind: "meal" | "manual";
+}
+
+export interface DaySummary {
+  day: string;
+  entries: LogEntry[];
+  water: number;
+  calories: number;
+  protein_g: number;
+  sodium_mg: number;
+  coach: string;
+}
+
+export interface Progress {
+  xp: number;
+  level: number;
+  streak: number;
+  meals_cooked: number;
+  items_rescued: number;
+}
+
+export interface Deal {
+  name: string;
+  unit: string;
+  pack_size: number;
+  price: number;
+  list_price: number;
+}
+
+export interface StoreDeals {
+  store: StoreInfo;
+  deals: Deal[];
+}
+
+export interface CookResult {
   items: InventoryItem[];
-  stat: RaidStat;
+  saved: SavedPlan;
+  day: DaySummary;
+  rescued: string[];
+  xp: number;
+}
+
+export interface FoodLogInput {
+  name: string;
+  calories: number;
+  protein_g: number;
+  sodium_mg: number;
 }
 
 export type RaidEvent =

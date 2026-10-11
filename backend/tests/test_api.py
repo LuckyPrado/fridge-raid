@@ -9,10 +9,9 @@ from fastapi.testclient import TestClient
 
 from app.catalog import Catalog
 from app.config import MAX_UPLOAD_BYTES, Settings
-from app.inventory_ops import apply_plan
+from app.inventory_ops import cook_dish
 from app.llm import LLMError
 from app.main import create_app
-from app.optimizer import optimize_plan
 from app.ratelimit import RateLimiter
 from app.repository import create_repository, sqlite_repository, utc_now_iso
 from app.schemas import RaidStat, ScoutDraft, ScoutDraftItem
@@ -33,26 +32,30 @@ def _demo_items(client: TestClient, fridge_id: str = "dorm") -> list[dict[str, A
 # --- inventory operations and persistence ---
 
 
-def test_apply_plan_consumes_food_and_stores_leftover_groceries(catalog: Catalog) -> None:
-    inventory = [make_item("spinach", 4, 1), make_item("egg", 2, 10)]
+def test_cooking_a_dish_uses_up_its_ingredients_without_mutating_the_inventory() -> None:
+    inventory = [make_item("spinach", 4, 1), make_item("egg", 6, 10)]
     dish = make_dish("Big Scramble", {"spinach": 4, "egg": 5})
-    plan = optimize_plan([dish], inventory, catalog, budget=10.0, max_meals=1)
 
-    after = apply_plan(inventory, plan, catalog)
+    after = cook_dish(inventory, dish)
 
-    assert [(item.name, item.quantity) for item in after] == [("egg", 9)]  # bought 12, had 2, used 5
-    assert after[0].days_left == 21
+    assert [(item.name, item.quantity) for item in after] == [("egg", 1)]
     assert inventory[0].quantity == 4, "the original inventory must not be mutated"
 
 
-def test_apply_plan_uses_soonest_expiring_stock_first(catalog: Catalog) -> None:
+def test_cooking_uses_soonest_expiring_stock_first() -> None:
     inventory = [make_item("egg", 3, 10, item_id="fresh"), make_item("egg", 3, 1, item_id="old")]
     dish = make_dish("Omelette", {"egg": 4})
-    plan = optimize_plan([dish], inventory, catalog, budget=0.0, max_meals=1)
 
-    after = apply_plan(inventory, plan, catalog)
+    after = cook_dish(inventory, dish)
 
     assert [(item.id, item.quantity) for item in after] == [("fresh", 2)]
+
+
+def test_cooking_ignores_ingredients_that_are_not_in_stock() -> None:
+    inventory = [make_item("egg", 2, 5)]
+    dish = make_dish("Salmon Eggs", {"egg": 2, "salmon": 1})
+
+    assert cook_dish(inventory, dish) == []
 
 
 def test_repository_round_trips_inventory_and_stats(tmp_path: Path) -> None:
@@ -187,21 +190,6 @@ def test_raid_rejects_an_empty_inventory(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_accepting_a_plan_updates_inventory_and_records_a_stat(client: TestClient) -> None:
-    items = _demo_items(client)
-    events = _events(client.post("/api/raid", json={"inventory": items}).text)
-    plan = next(event["plan"] for event in events if event["type"] == "plan")
-
-    accepted = client.post("/api/plan/accept", json={"inventory": items, "plan": plan}).json()["data"]
-    stats = client.get("/api/stats").json()["data"]
-    stored = client.get("/api/inventory").json()["data"]["items"]
-
-    assert accepted["stat"]["meals"] == len(plan["dishes"])
-    assert len(stats) == 1 and stats[0]["spend"] == plan["total_cost"]
-    assert len(stored) == len(accepted["items"])
-    assert {item["name"] for item in stored} != {item["name"] for item in items}
-
-
 def test_scout_is_unavailable_without_a_key(client: TestClient) -> None:
     response = client.post("/api/scout", files={"photo": ("fridge.png", b"fake", "image/png")})
 
@@ -261,17 +249,6 @@ def test_scout_refuses_an_oversized_upload_from_its_declared_length(settings: Se
     )
 
     assert response.status_code == 413
-
-
-def test_accept_rejects_a_plan_with_impossible_numbers(client: TestClient) -> None:
-    plan = {
-        "dishes": [], "cart": [], "total_cost": -5, "budget": 25, "rescued": [],
-        "waste_value_total": 0, "waste_value_saved": 0,
-    }
-
-    response = client.post("/api/plan/accept", json={"inventory": [], "plan": plan})
-
-    assert response.status_code == 422
 
 
 def test_scout_reports_a_gateway_error_when_the_model_fails(settings: Settings) -> None:

@@ -52,6 +52,7 @@ def _draft(name: str, **overrides: Any) -> DishDraft:
         "name": name, "pitch": "Bold!", "description": "A dish.",
         "ingredients": [IngredientDraft(name="spinach", quantity=2, unit="unit")],
         "calories": 400, "protein_g": 20, "sodium_mg": 300, "minutes": 15,
+        "steps": ["Wilt the spinach.", "  ", "Serve."],
     }
     return DishDraft(**{**fields, **overrides})
 

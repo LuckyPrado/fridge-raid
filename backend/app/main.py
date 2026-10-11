@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import router
+from app.api_day import router as day_router
 from app.config import Settings, load_settings
 from app.llm import LLM
 from app.repository import Repository
@@ -54,6 +55,7 @@ def create_app(
         return _failure(500, "Something went wrong on the server.")
 
     app.include_router(router)
+    app.include_router(day_router)
     return app
 
 

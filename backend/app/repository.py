@@ -1,7 +1,7 @@
-"""Persistence for inventory and weekly raid stats.
+"""Persistence for inventory, the food log, cooking stats, and small saved documents.
 
 One SQL implementation serves both Tiger Data (Postgres) and the local SQLite fallback.
-On Postgres with TimescaleDB, raid_stats becomes a hypertable so history queries stay fast.
+On Postgres with TimescaleDB, the time-series tables (raid_stats, food_log) become hypertables.
 """
 
 from __future__ import annotations
@@ -14,11 +14,13 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Protocol, Sequence
 
-from app.schemas import CATEGORIES, InventoryItem, RaidStat
+from app.schemas import CATEGORIES, InventoryItem, LogEntry, RaidStat
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_STATS_LIMIT = 52
+DEFAULT_STATS_LIMIT = 500
+STREAK_LOOKBACK_DAYS = 120
+HYPERTABLES = ("raid_stats", "food_log")
 
 _INVENTORY_DDL = """
 CREATE TABLE IF NOT EXISTS inventory (
@@ -41,6 +43,27 @@ CREATE TABLE IF NOT EXISTS raid_stats (
 )
 """
 
+_LOG_DDL = """
+CREATE TABLE IF NOT EXISTS food_log (
+    ts {ts_type} NOT NULL,
+    id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    name TEXT NOT NULL,
+    calories INTEGER NOT NULL,
+    protein_g INTEGER NOT NULL,
+    sodium_mg INTEGER NOT NULL,
+    kind TEXT NOT NULL
+)
+"""
+
+# Small JSON documents keyed by name: the profile, the current plan, water per day.
+_DOCS_DDL = """
+CREATE TABLE IF NOT EXISTS app_docs (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+)
+"""
+
 
 class Repository(Protocol):
     name: str
@@ -53,6 +76,16 @@ class Repository(Protocol):
 
     def list_stats(self, limit: int = DEFAULT_STATS_LIMIT) -> list[RaidStat]: ...
 
+    def add_log(self, entry: LogEntry) -> None: ...
+
+    def list_log(self, day: str) -> list[LogEntry]: ...
+
+    def logged_days(self, limit: int = STREAK_LOOKBACK_DAYS) -> list[str]: ...
+
+    def get_doc(self, key: str) -> str | None: ...
+
+    def put_doc(self, key: str, value: str) -> None: ...
+
 
 class SqlRepository:
     def __init__(self, name: str, connect: Callable[[], Any], placeholder: str, ts_type: str) -> None:
@@ -60,7 +93,7 @@ class SqlRepository:
         self._connect = connect
         self._ph = placeholder
         self._ts_type = ts_type
-        # Serializes replace_items: overlapping delete-then-insert writes collide on Postgres.
+        # Serializes writes: overlapping delete-then-insert collides on Postgres, and SQLite allows one writer.
         self._write_lock = threading.Lock()
 
     def init_schema(self, hypertable: bool = False) -> None:
@@ -68,17 +101,22 @@ class SqlRepository:
             cursor = conn.cursor()
             cursor.execute(_INVENTORY_DDL)
             cursor.execute(_STATS_DDL.format(ts_type=self._ts_type))
+            cursor.execute(_LOG_DDL.format(ts_type=self._ts_type))
+            cursor.execute(_DOCS_DDL)
             conn.commit()
             if hypertable:
-                self._try_hypertable(conn)
+                for table in HYPERTABLES:
+                    self._try_hypertable(conn, table)
 
-    def _try_hypertable(self, conn: Any) -> None:
+    def _try_hypertable(self, conn: Any, table: str) -> None:
         try:
-            conn.cursor().execute("SELECT create_hypertable('raid_stats', 'ts', if_not_exists => TRUE)")
+            conn.cursor().execute(
+                f"SELECT create_hypertable({self._ph}::regclass, 'ts', if_not_exists => TRUE, migrate_data => TRUE)", (table,)
+            )
             conn.commit()
-        except Exception:  # extension missing or table already populated
+        except Exception:  # extension missing
             conn.rollback()
-            logger.warning("Could not create hypertable for raid_stats; using a plain table.", exc_info=True)
+            logger.warning("Could not create hypertable for %s; using a plain table.", table, exc_info=True)
 
     def list_items(self) -> list[InventoryItem]:
         today = date.today()
@@ -120,7 +158,7 @@ class SqlRepository:
             "INSERT INTO raid_stats (ts, meals, spend, waste_value_saved, items_rescued) "
             f"VALUES ({', '.join([self._ph] * 5)})"
         )
-        with closing(self._connect()) as conn:
+        with self._write_lock, closing(self._connect()) as conn:
             conn.cursor().execute(
                 insert, (stat.ts, stat.meals, stat.spend, stat.waste_value_saved, stat.items_rescued)
             )
@@ -137,7 +175,7 @@ class SqlRepository:
             rows = cursor.fetchall()
         return [
             RaidStat(
-                ts=row[0].isoformat() if isinstance(row[0], datetime) else str(row[0]),
+                ts=_iso(row[0]),
                 meals=row[1],
                 spend=row[2],
                 waste_value_saved=row[3],
@@ -145,6 +183,63 @@ class SqlRepository:
             )
             for row in reversed(rows)
         ]
+
+    def add_log(self, entry: LogEntry) -> None:
+        insert = (
+            "INSERT INTO food_log (ts, id, day, name, calories, protein_g, sodium_mg, kind) "
+            f"VALUES ({', '.join([self._ph] * 8)})"
+        )
+        row = (
+            entry.ts, entry.id, entry.day, entry.name, entry.calories, entry.protein_g, entry.sodium_mg, entry.kind
+        )
+        with self._write_lock, closing(self._connect()) as conn:
+            conn.cursor().execute(insert, row)
+            conn.commit()
+
+    def list_log(self, day: str) -> list[LogEntry]:
+        query = (
+            "SELECT ts, id, day, name, calories, protein_g, sodium_mg, kind FROM food_log "
+            f"WHERE day = {self._ph} ORDER BY ts LIMIT 200"
+        )
+        with closing(self._connect()) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (day,))
+            rows = cursor.fetchall()
+        return [
+            LogEntry(
+                ts=_iso(row[0]), id=row[1], day=row[2], name=row[3], calories=row[4], protein_g=row[5],
+                sodium_mg=row[6], kind=row[7] if row[7] in ("meal", "manual") else "manual",
+            )
+            for row in rows
+        ]
+
+    def logged_days(self, limit: int = STREAK_LOOKBACK_DAYS) -> list[str]:
+        """Distinct days with at least one log entry, newest first."""
+        query = f"SELECT DISTINCT day FROM food_log ORDER BY day DESC LIMIT {self._ph}"
+        with closing(self._connect()) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (limit,))
+            return [row[0] for row in cursor.fetchall()]
+
+    def get_doc(self, key: str) -> str | None:
+        with closing(self._connect()) as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"SELECT value FROM app_docs WHERE key = {self._ph}", (key,))
+            row = cursor.fetchone()
+        return row[0] if row else None
+
+    def put_doc(self, key: str, value: str) -> None:
+        upsert = (
+            f"INSERT INTO app_docs (key, value) VALUES ({self._ph}, {self._ph}) "
+            "ON CONFLICT (key) DO UPDATE SET value = excluded.value"
+        )
+        with self._write_lock, closing(self._connect()) as conn:
+            conn.cursor().execute(upsert, (key, value))
+            conn.commit()
+
+
+def _iso(value: Any) -> str:
+    return value.isoformat() if isinstance(value, datetime) else str(value)
 
 
 def utc_now_iso() -> str:

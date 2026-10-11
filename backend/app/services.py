@@ -15,6 +15,7 @@ from app.agents.chef import GeminiChef, OfflineChef, load_recipes
 from app.agents.nutritionist import GeminiNutritionist, OfflineNutritionist
 from app.catalog import Catalog, load_catalog
 from app.config import DATA_DIR, Settings
+from app.deals import Store, load_stores
 from app.llm import LLM, GeminiLLM
 from app.repository import Repository, create_repository
 from app.schemas import Frozen, InventoryItem
@@ -38,6 +39,7 @@ class Services:
     live_party: Party | None
     offline_party: Party
     demo_fridges: tuple[DemoFridge, ...]
+    stores: tuple[Store, ...] = ()
 
     def party_for(self, force_offline: bool) -> Party:
         if force_offline or self.live_party is None:
@@ -91,6 +93,7 @@ def build_services(
         live_party=live_party,
         offline_party=offline_party,
         demo_fridges=load_demo_fridges(DATA_DIR / "demo" / "fridges.json"),
+        stores=load_stores(DATA_DIR / "stores.json", catalog),
     )
 
 

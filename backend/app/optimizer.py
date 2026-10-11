@@ -55,7 +55,10 @@ def total_needs(dishes: Iterable[Dish]) -> dict[str, Need]:
     return needs
 
 
-def build_cart(dishes: Iterable[Dish], stock: Mapping[str, float], catalog: Catalog) -> tuple[CartLine, ...]:
+def build_cart(
+    dishes: Iterable[Dish], stock: Mapping[str, float], catalog: Catalog, regular: Catalog | None = None
+) -> tuple[CartLine, ...]:
+    """Packs to buy at the catalog's prices. `regular` supplies the non-sale price for comparison."""
     lines = []
     for key, need in sorted(total_needs(dishes).items()):
         shortfall = need.quantity - stock.get(key, 0.0)
@@ -63,6 +66,7 @@ def build_cart(dishes: Iterable[Dish], stock: Mapping[str, float], catalog: Cata
             continue
         entry = catalog.resolve(need.name, need.unit)
         packs = math.ceil(shortfall / entry.pack_size - _EPSILON)
+        list_price = (regular or catalog).resolve(need.name, need.unit).pack_price
         lines.append(
             CartLine(
                 name=entry.name,
@@ -70,6 +74,7 @@ def build_cart(dishes: Iterable[Dish], stock: Mapping[str, float], catalog: Cata
                 pack_size=entry.pack_size,
                 unit=entry.unit,
                 cost=round(packs * entry.pack_price, 2),
+                list_cost=round(packs * list_price, 2),
             )
         )
     return tuple(lines)
@@ -127,7 +132,10 @@ def optimize_plan(
     catalog: Catalog,
     budget: float,
     max_meals: int,
+    shop: Catalog | None = None,
 ) -> WeekPlan:
+    """Pick the dishes and cart. `shop` is one store's prices; food value always uses the catalog."""
+    prices = shop or catalog
     stock = stock_of(inventory)
     risky = at_risk_items(inventory, catalog)
     pool = _shortlist(candidates, risky)
@@ -136,7 +144,7 @@ def optimize_plan(
     best_key: tuple[float, int, float] = (-1.0, 0, 0.0)
     for size in range(1, min(max_meals, len(pool)) + 1):
         for subset in combinations(pool, size):
-            cost = cart_total(build_cart(subset, stock, catalog))
+            cost = cart_total(build_cart(subset, stock, prices))
             if cost > budget + _EPSILON:
                 continue
             key = (rescued(subset, risky)[0], size, -cost)
@@ -144,7 +152,7 @@ def optimize_plan(
                 best, best_key = subset, key
 
     ordered = tuple(sorted(best, key=lambda dish: rescued([dish], risky)[0], reverse=True))
-    cart = build_cart(ordered, stock, catalog)
+    cart = build_cart(ordered, stock, prices, regular=catalog)
     saved, names = rescued(ordered, risky)
     chosen_ids = {id(dish) for dish in ordered}
     return WeekPlan(

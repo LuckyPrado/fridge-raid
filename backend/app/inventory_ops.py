@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import uuid
-from typing import Iterable, Sequence
+from typing import Sequence
 
-from app.catalog import Catalog, normalize_name
+from app.catalog import normalize_name
 from app.optimizer import total_needs
-from app.schemas import CATEGORIES, InventoryItem, WeekPlan
+from app.schemas import Dish, InventoryItem
 
 _EPSILON = 1e-9
 
@@ -31,31 +31,7 @@ def _consume(inventory: Sequence[InventoryItem], needs: dict[str, float]) -> lis
     return kept
 
 
-def _leftover_purchases(plan: WeekPlan, shortfalls: dict[str, float], catalog: Catalog) -> Iterable[InventoryItem]:
-    for line in plan.cart:
-        key = normalize_name(line.name)
-        leftover = round(line.packs * line.pack_size - shortfalls.get(key, 0.0), 3)
-        if leftover <= _EPSILON:
-            continue
-        entry = catalog.resolve(line.name, line.unit)
-        category = entry.category if entry.category in CATEGORIES else "other"
-        yield InventoryItem(
-            id=new_item_id(),
-            name=entry.name,
-            category=category,
-            quantity=leftover,
-            unit=entry.unit,
-            days_left=entry.shelf_life_days,
-        )
-
-
-def apply_plan(inventory: Sequence[InventoryItem], plan: WeekPlan, catalog: Catalog) -> list[InventoryItem]:
-    """Inventory after cooking the plan and unpacking the groceries it bought."""
-    needs = {key: need.quantity for key, need in total_needs(plan.dishes).items()}
-    stock: dict[str, float] = {}
-    for item in inventory:
-        key = normalize_name(item.name)
-        stock[key] = stock.get(key, 0.0) + item.quantity
-    shortfalls = {key: max(0.0, quantity - stock.get(key, 0.0)) for key, quantity in needs.items()}
-    after_cooking = _consume(inventory, needs)
-    return [*after_cooking, *_leftover_purchases(plan, shortfalls, catalog)]
+def cook_dish(inventory: Sequence[InventoryItem], dish: Dish) -> list[InventoryItem]:
+    """Inventory after cooking one dish. Ingredients that are not in stock are assumed bought and used up."""
+    needs = {key: need.quantity for key, need in total_needs([dish]).items()}
+    return _consume(inventory, needs)

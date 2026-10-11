@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import AsyncIterator, Generic, TypeVar
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
+from app import tracker
 from app.config import MAX_UPLOAD_BYTES
-from app.inventory_ops import apply_plan
 from app.llm import LLMError
 from app.negotiation import run_raid
 from app.optimizer import at_risk_items, waste_value_total
 from app.ratelimit import rate_limit
-from app.repository import utc_now_iso
-from app.schemas import AcceptRequest, InventoryItem, InventoryPayload, RaidRequest, RaidStat
+from app.schemas import InventoryPayload, RaidRequest, RaidStat, WeekPlan
 from app.scout import scout_fridge
 from app.services import DemoFridge, Services, get_services
 
@@ -49,11 +49,6 @@ class ThreatInfo(BaseModel):
     at_risk: list[str]
 
 
-class AcceptResult(BaseModel):
-    items: list[InventoryItem]
-    stat: RaidStat
-
-
 router = APIRouter(prefix="/api")
 
 
@@ -81,7 +76,7 @@ def get_inventory(services: Services = Depends(get_services)) -> Envelope[Invent
 
 @router.post("/threat", response_model=Envelope[ThreatInfo])
 def get_threat(payload: InventoryPayload, services: Services = Depends(get_services)) -> Envelope[ThreatInfo]:
-    """Dollar value of food about to expire: the boss's starting health."""
+    """Dollar value of food about to expire, and which items it is."""
     risky = at_risk_items(payload.items, services.catalog)
     return Envelope(
         data=ThreatInfo(
@@ -140,10 +135,20 @@ async def scout(
     return Envelope(data=InventoryPayload(items=items))
 
 
+def _remember_plan(event: dict, services: Services) -> None:
+    """Save the settled plan so the Chef and Shop tabs survive a reload."""
+    try:
+        tracker.save_plan(services.repository, WeekPlan.model_validate(event["plan"]))
+    except (ValidationError, KeyError):
+        logger.exception("The settled plan could not be saved.")
+
+
 async def _sse(request: RaidRequest, services: Services) -> AsyncIterator[str]:
     party = services.party_for(request.offline)
     try:
-        async for event in run_raid(request, party, services.offline_party, services.catalog):
+        async for event in run_raid(request, party, services.offline_party, services.catalog, services.stores):
+            if event["type"] == "plan":
+                await asyncio.to_thread(_remember_plan, event, services)
             yield f"data: {json.dumps(event)}\n\n"
     except Exception:
         logger.exception("Raid failed")
@@ -158,25 +163,6 @@ async def raid(request: RaidRequest, services: Services = Depends(get_services))
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-
-
-@router.post(
-    "/plan/accept",
-    response_model=Envelope[AcceptResult],
-    dependencies=[Depends(rate_limit(WRITE_REQUESTS_PER_MINUTE))],
-)
-def accept_plan(request: AcceptRequest, services: Services = Depends(get_services)) -> Envelope[AcceptResult]:
-    items = apply_plan(request.inventory, request.plan, services.catalog)
-    stat = RaidStat(
-        ts=utc_now_iso(),
-        meals=len(request.plan.dishes),
-        spend=request.plan.total_cost,
-        waste_value_saved=request.plan.waste_value_saved,
-        items_rescued=len(request.plan.rescued),
-    )
-    services.repository.replace_items(items)
-    services.repository.add_stat(stat)
-    return Envelope(data=AcceptResult(items=items, stat=stat))
 
 
 @router.get("/stats", response_model=Envelope[list[RaidStat]])

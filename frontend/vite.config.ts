@@ -8,6 +8,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
+      // Listen on the local network so a phone on the same Wi-Fi can open the app.
+      host: true,
       port: 5173,
       proxy: { "/api": { target: env.VITE_PROXY_TARGET || DEFAULT_BACKEND_URL, changeOrigin: true } },
     },

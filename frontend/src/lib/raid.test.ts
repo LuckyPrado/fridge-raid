@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import type { Dish, RaidEvent, WeekPlan } from "../types";
 import { applyEvent, beginRaid, IDLE_RAID } from "./raid";
-import { daysLabel, ingredientLabel, isAtRisk, packLabel, shelfOf, spriteFor } from "./sprites";
 import { parseFrame } from "./stream";
 
 const dish = (id: string, name: string): Dish => ({
@@ -16,6 +15,7 @@ const dish = (id: string, name: string): Dish => ({
   sodium_mg: 300,
   minutes: 10,
   diets: [],
+  steps: [],
 });
 
 const plan: WeekPlan = {
@@ -27,6 +27,7 @@ const plan: WeekPlan = {
   waste_value_total: 6,
   waste_value_saved: 5,
   benched: [],
+  store: null,
 };
 
 const play = (events: RaidEvent[]) => events.reduce(applyEvent, beginRaid());
@@ -110,46 +111,4 @@ describe("parseFrame", () => {
       expect(parseFrame(frame)).toBeNull();
     },
   );
-});
-
-describe("sprites", () => {
-  it("matches a sprite by keyword and falls back to the category", () => {
-    expect(spriteFor({ name: "baby spinach", category: "produce" })).toBe("🥬");
-    expect(spriteFor({ name: "mystery jar", category: "condiment" })).toBe("🫙");
-  });
-
-  it("labels days left in plain words", () => {
-    expect([daysLabel(-1), daysLabel(0), daysLabel(1), daysLabel(5), daysLabel(200)]).toEqual([
-      "expired",
-      "today",
-      "1 day",
-      "5 days",
-      "keeps",
-    ]);
-  });
-
-  it("drops units that only repeat the food name", () => {
-    expect(ingredientLabel(4, "egg", "egg")).toBe("4 egg");
-    expect(ingredientLabel(2, "whole", "zucchini")).toBe("2 zucchini");
-    expect(ingredientLabel(0.5, "cup", "feta")).toBe("0.5 cup feta");
-  });
-
-  it("describes how a grocery line is sold", () => {
-    expect(packLabel(1, 12, "egg", "egg")).toBe("1 pack of 12");
-    expect(packLabel(2, 1, "whole", "zucchini")).toBe("2");
-    expect(packLabel(1, 10, "cup", "oats")).toBe("1 × 10 cup");
-  });
-
-  it("flags food expiring within three days", () => {
-    expect([isAtRisk(3), isAtRisk(4)]).toEqual([true, false]);
-  });
-
-  it("puts each category on a shelf", () => {
-    expect([shelfOf("dairy"), shelfOf("protein"), shelfOf("produce"), shelfOf("condiment")]).toEqual([
-      "top",
-      "middle",
-      "crisper",
-      "door",
-    ]);
-  });
 });

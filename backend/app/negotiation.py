@@ -7,21 +7,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable, Mapping, TypeVar
+from typing import Any, AsyncIterator, Awaitable, Callable, Mapping, Sequence, TypeVar
 
 from app.agents.base import Party, RaidContext, Rejection
 from app.catalog import Catalog
+from app.deals import Store, best_store_plan
 from app.llm import LLMError
-from app.optimizer import (
-    AtRisk,
-    at_risk_items,
-    build_cart,
-    cart_total,
-    optimize_plan,
-    rescued,
-    stock_of,
-    waste_value_total,
-)
+from app.optimizer import AtRisk, at_risk_items, build_cart, cart_total, rescued, stock_of, waste_value_total
 from app.schemas import Dish, RaidRequest, Verdict
 
 logger = logging.getLogger(__name__)
@@ -137,8 +129,11 @@ async def _settle(
     stock: Mapping[str, float],
     risky: Mapping[str, AtRisk],
     state: _RaidState,
+    stores: Sequence[Store],
 ) -> AsyncIterator[Event]:
-    plan = optimize_plan(state.approved, ctx.inventory, ctx.catalog, ctx.goals.budget, ctx.goals.meals)
+    plan, shop = best_store_plan(
+        state.approved, ctx.inventory, ctx.catalog, stores, ctx.goals.budget, ctx.goals.meals
+    )
     boss_max = waste_value_total(risky)
     previous_saved = 0.0
     for index, dish in enumerate(plan.dishes, start=1):
@@ -147,7 +142,7 @@ async def _settle(
         yield _event(
             "strike", dish_id=dish.id, dish_name=dish.name,
             damage=round(saved - previous_saved, 2), hp=round(max(0.0, boss_max - saved), 2),
-            spent=cart_total(build_cart(so_far, stock, ctx.catalog)),
+            spent=cart_total(build_cart(so_far, stock, shop)),
         )
         previous_saved = saved
 
@@ -163,7 +158,9 @@ async def _settle(
     yield _event("plan", plan=plan.model_dump())
 
 
-async def run_raid(request: RaidRequest, party: Party, backup: Party, catalog: Catalog) -> AsyncIterator[Event]:
+async def run_raid(
+    request: RaidRequest, party: Party, backup: Party, catalog: Catalog, stores: Sequence[Store] = ()
+) -> AsyncIterator[Event]:
     inventory = tuple(request.inventory)
     by_id = {item.id: item for item in inventory}
     ctx = RaidContext(
@@ -183,6 +180,6 @@ async def run_raid(request: RaidRequest, party: Party, backup: Party, catalog: C
     )
     async for event in _negotiate(ctx, party, backup, stock, state):
         yield event
-    async for event in _settle(ctx, party, backup, stock, risky, state):
+    async for event in _settle(ctx, party, backup, stock, risky, state, stores):
         yield event
     yield _event("done")

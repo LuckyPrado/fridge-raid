@@ -1,0 +1,52 @@
+[
+  {
+    "id": "green-grove",
+    "name": "Green Grove Market",
+    "neighborhood": "Maple neighborhood",
+    "distance_mi": 0.4,
+    "walk_min": 8,
+    "deals": {
+      "lemon": 0.52,
+      "chickpeas": 0.99,
+      "yogurt": 2.79,
+      "spinach": 1.99,
+      "tortilla": 2.29,
+      "cheddar": 2.99,
+      "salsa": 2.49,
+      "kale": 1.99,
+      "feta": 2.99
+    }
+  },
+  {
+    "id": "corner-pantry",
+    "name": "Corner Pantry",
+    "neighborhood": "Maple neighborhood",
+    "distance_mi": 0.7,
+    "walk_min": 14,
+    "deals": {
+      "pasta": 0.99,
+      "parmesan": 3.49,
+      "cream": 1.99,
+      "bread": 1.99,
+      "egg": 2.49,
+      "bacon": 4.49,
+      "onion": 1.49
+    }
+  },
+  {
+    "id": "busch-bulk",
+    "name": "Busch Bulk Barn",
+    "neighborhood": "Campus edge",
+    "distance_mi": 1.6,
+    "walk_min": 32,
+    "deals": {
+      "rice": 1.87,
+      "black beans": 0.89,
+      "chicken breast": 4.49,
+      "broccoli": 1.79,
+      "soy sauce": 1.99,
+      "oats": 2.49,
+      "bell pepper": 0.99
+    }
+  }
+]

@@ -8,7 +8,17 @@ from typing import Protocol, Sequence
 from pydantic import ValidationError
 
 from app.catalog import Catalog
-from app.schemas import Dish, DishDraft, Goals, Ingredient, InventoryItem, Verdict, WeekPlan
+from app.schemas import (
+    MAX_STEP_CHARS,
+    MAX_STEPS,
+    Dish,
+    DishDraft,
+    Goals,
+    Ingredient,
+    InventoryItem,
+    Verdict,
+    WeekPlan,
+)
 
 SERVINGS = 2
 MAX_PACKS_PER_INGREDIENT = 3
@@ -99,6 +109,7 @@ def dish_from_draft(draft: DishDraft) -> Dish | None:
             protein_g=_clamp(draft.protein_g, 0, 500),
             sodium_mg=_clamp(draft.sodium_mg, 0, 20000),
             minutes=_clamp(draft.minutes, 0, 600),
+            steps=tuple(step.strip()[:MAX_STEP_CHARS] for step in draft.steps if step.strip())[:MAX_STEPS],
         )
     except ValidationError:
         return None

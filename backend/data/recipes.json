@@ -34,7 +34,12 @@
     "protein_g": 27,
     "sodium_mg": 840,
     "minutes": 15,
-    "diets": []
+    "diets": [],
+    "steps": [
+      "Cook the bacon in a dry pan until crisp, then set it on a paper towel.",
+      "Wilt the spinach in the same pan for one minute. Slice the tomato and scallion.",
+      "Warm the tortillas, fill them with bacon, spinach, tomato, and scallion, then roll and serve."
+    ]
   },
   {
     "name": "Spinach and Egg Scramble Tacos",
@@ -74,6 +79,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Wilt the spinach in a lightly oiled pan for one minute.",
+      "Pour in the beaten eggs and stir gently until just set. Fold in the cheddar.",
+      "Warm the tortillas, fill them with the scramble, and top with salsa."
     ]
   },
   {
@@ -114,6 +124,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Heat the oven to 375 F. Soften the sliced onion in an oven-safe pan for 4 minutes.",
+      "Add the spinach and chopped tomato and cook until the spinach wilts.",
+      "Pour over the beaten eggs, crumble on the feta, and bake for 12 minutes until set."
     ]
   },
   {
@@ -154,6 +169,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Boil the pasta until just tender. Save half a cup of the cooking water.",
+      "Brown the sliced mushrooms in a pan, then add the garlic for one minute.",
+      "Stir in the cream, parmesan, pasta, and a splash of pasta water until glossy."
     ]
   },
   {
@@ -191,7 +211,12 @@
     "protein_g": 32,
     "sodium_mg": 2350,
     "minutes": 15,
-    "diets": []
+    "diets": [],
+    "steps": [
+      "Crisp the chopped bacon in a pot.",
+      "Add water and the ramen noodles and cook for 3 minutes. Stir in the soy sauce.",
+      "Crack in the egg, cover for one minute, and finish with sliced scallion."
+    ]
   },
   {
     "name": "Chicken Veggie Stir-Fry",
@@ -233,7 +258,12 @@
     "protein_g": 42,
     "sodium_mg": 780,
     "minutes": 25,
-    "diets": []
+    "diets": [],
+    "steps": [
+      "Cook the rice. Slice the chicken, bell pepper, and broccoli into bite-size pieces.",
+      "Sear the chicken in a hot pan for 5 minutes, then add the vegetables and garlic for 4 minutes.",
+      "Toss with the soy sauce and serve over the rice."
+    ]
   },
   {
     "name": "Black Bean Quesadillas",
@@ -273,6 +303,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Dice the bell pepper. Mash half of the black beans with a fork.",
+      "Spread beans, pepper, cheddar, and a spoon of salsa over half of each tortilla and fold.",
+      "Toast in a dry pan for 2 minutes a side until crisp. Serve with the rest of the salsa."
     ]
   },
   {
@@ -319,6 +354,11 @@
       "vegan",
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Cook the rice. Cube the tofu and slice the bell pepper.",
+      "Fry the curry paste for one minute, then add the coconut milk, tofu, and pepper and simmer for 10 minutes.",
+      "Stir in the spinach until it wilts and serve over the rice."
     ]
   },
   {
@@ -358,6 +398,11 @@
     "minutes": 25,
     "diets": [
       "pescatarian"
+    ],
+    "steps": [
+      "Heat the oven to 425 F. Cook the rice.",
+      "Spread the salmon and broccoli on a tray with the garlic and half of the lemon juice. Roast for 12 minutes.",
+      "Squeeze over the remaining lemon and serve with the rice."
     ]
   },
   {
@@ -398,6 +443,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Stir the oats, yogurt, and milk together in a jar.",
+      "Top with the berries and honey.",
+      "Chill for at least 4 hours, or overnight, and eat cold."
     ]
   },
   {
@@ -440,7 +490,12 @@
     "protein_g": 46,
     "sodium_mg": 2100,
     "minutes": 25,
-    "diets": []
+    "diets": [],
+    "steps": [
+      "Boil the pasta. Brown the sliced sausage and chopped bacon in a pan.",
+      "Whisk the egg, parmesan, and cream in a bowl.",
+      "Take the pan off the heat, add the drained pasta, and stir in the egg mix quickly until creamy."
+    ]
   },
   {
     "name": "Chickpea Tomato Stew",
@@ -491,6 +546,11 @@
       "vegan",
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Soften the chopped onion and garlic in a pot for 5 minutes.",
+      "Add the canned tomatoes, fresh tomato, and chickpeas and simmer for 15 minutes.",
+      "Stir in the kale until tender and serve with toasted bread."
     ]
   },
   {
@@ -528,7 +588,12 @@
     "protein_g": 34,
     "sodium_mg": 980,
     "minutes": 10,
-    "diets": []
+    "diets": [],
+    "steps": [
+      "Toast the bread lightly. Slice the avocado and tomato.",
+      "Layer turkey, avocado, tomato, and cheddar on the bread.",
+      "Grill or pan-toast under a lid until the cheddar melts."
+    ]
   },
   {
     "name": "Veggie Fried Rice",
@@ -573,6 +638,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Dice the carrot and slice the scallion. Scramble the egg in a hot pan and set it aside.",
+      "Fry the carrot and corn for 3 minutes, then add the cooked rice and fry until hot.",
+      "Stir in the soy sauce, egg, and scallion and serve."
     ]
   },
   {
@@ -613,6 +683,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Toast the bread.",
+      "Spread on the pesto and layer the sliced mozzarella and tomato.",
+      "Grill for 2 minutes until the cheese softens, then top with torn basil."
     ]
   },
   {
@@ -655,7 +730,12 @@
     "protein_g": 40,
     "sodium_mg": 820,
     "minutes": 25,
-    "diets": []
+    "diets": [],
+    "steps": [
+      "Cook the rice. Brown the ground beef in a pan for 6 minutes.",
+      "Stir the black beans and half of the salsa into the beef and warm through.",
+      "Serve over the rice with shredded lettuce, sliced avocado, and the rest of the salsa."
+    ]
   },
   {
     "name": "Zucchini Mushroom Egg Skillet",
@@ -695,6 +775,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Slice the zucchini and mushroom and brown them in a pan with the garlic for 6 minutes.",
+      "Make small wells and crack in the eggs.",
+      "Cover for 4 minutes until the whites set, then finish with parmesan."
     ]
   },
   {
@@ -734,6 +819,11 @@
     "minutes": 15,
     "diets": [
       "pescatarian"
+    ],
+    "steps": [
+      "Cut the zucchini into thin ribbons or noodles.",
+      "Melt the butter, add the garlic and shrimp, and cook for 3 minutes until pink.",
+      "Toss in the zucchini for 2 minutes and finish with lemon juice."
     ]
   },
   {
@@ -769,6 +859,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Dice the sweet potato and onion and fry for 12 minutes until tender.",
+      "Stir in the kale until it wilts.",
+      "Make wells, crack in the eggs, and cover for 4 minutes until set."
     ]
   },
   {
@@ -806,7 +901,12 @@
     "protein_g": 44,
     "sodium_mg": 360,
     "minutes": 25,
-    "diets": []
+    "diets": [],
+    "steps": [
+      "Cook the rice. Pan-sear the chicken for 6 minutes a side, then slice it.",
+      "Massage the kale with half of the lemon juice until soft.",
+      "Build bowls with rice, kale, chicken, and sliced avocado. Squeeze over the remaining lemon."
+    ]
   },
   {
     "name": "Tomato Cream Pasta",
@@ -846,6 +946,11 @@
     "diets": [
       "vegetarian",
       "pescatarian"
+    ],
+    "steps": [
+      "Boil the pasta until just tender.",
+      "Simmer the chopped tomato in a pan for 6 minutes, then stir in the cream.",
+      "Toss with the pasta and parmesan and finish with torn basil."
     ]
   }
 ]

@@ -1,11 +1,15 @@
 import type {
-  AcceptResult,
+  CookResult,
+  DaySummary,
   DemoFridge,
+  FoodLogInput,
   InventoryItem,
-  RaidStat,
+  Profile,
+  Progress,
+  SavedPlan,
   StatusInfo,
+  StoreDeals,
   Threat,
-  WeekPlan,
 } from "../types";
 
 export const API_BASE: string = import.meta.env.VITE_API_URL ?? "";
@@ -48,14 +52,23 @@ function json(method: string, body: unknown): RequestInit {
 export const api = {
   status: (): Promise<StatusInfo> => request("/api/status"),
   demoFridges: (): Promise<DemoFridge[]> => request("/api/demo-fridges"),
-  stats: (): Promise<RaidStat[]> => request("/api/stats"),
+  profile: (): Promise<Profile> => request("/api/profile"),
+  saveProfile: (profile: Profile): Promise<Profile> => request("/api/profile", json("PUT", profile)),
+  plan: (): Promise<SavedPlan> => request("/api/plan"),
+  cook: (dishId: string, day: string): Promise<CookResult> =>
+    request("/api/cook", json("POST", { dish_id: dishId, day })),
+  day: (day: string): Promise<DaySummary> => request(`/api/day/${day}`),
+  logFood: (day: string, entry: FoodLogInput): Promise<DaySummary> =>
+    request(`/api/day/${day}/log`, json("POST", entry)),
+  setWater: (day: string, glasses: number): Promise<DaySummary> =>
+    request(`/api/day/${day}/water`, json("PUT", { glasses })),
+  progress: (today: string): Promise<Progress> => request(`/api/progress?today=${today}`),
+  stores: (): Promise<StoreDeals[]> => request("/api/stores"),
   inventory: async (): Promise<InventoryItem[]> =>
     (await request<{ items: InventoryItem[] }>("/api/inventory")).items,
   saveInventory: async (items: InventoryItem[]): Promise<InventoryItem[]> =>
     (await request<{ items: InventoryItem[] }>("/api/inventory", json("PUT", { items }))).items,
   threat: (items: InventoryItem[]): Promise<Threat> => request("/api/threat", json("POST", { items })),
-  acceptPlan: (inventory: InventoryItem[], plan: WeekPlan): Promise<AcceptResult> =>
-    request("/api/plan/accept", json("POST", { inventory, plan })),
   scout: async (photo: File): Promise<InventoryItem[]> => {
     const form = new FormData();
     form.append("photo", photo);
