@@ -369,3 +369,34 @@ def test_planning_streams_the_store_comparison(client: TestClient) -> None:
     assert len(stores["quotes"]) >= 2
     assert [quote["chosen"] for quote in stores["quotes"]].count(True) == 1
     assert stores["quotes"][0]["chosen"] and stores["quotes"][0]["name"] in stores["text"]
+
+
+@pytest.mark.integration
+def test_reset_erases_everything_the_player_saved(client: TestClient) -> None:
+    plan = _plan_a_dorm_week(client)
+    client.post("/api/cook", json={"dish_id": plan["dishes"][0]["id"], "day": TODAY})
+    client.put(f"/api/day/{TODAY}/water", json={"glasses": 3})
+    client.put("/api/profile", json={"name": "Alex", "onboarded": True, "goals": {"budget": 40}})
+
+    fresh = client.post("/api/reset").json()["data"]
+    progress = client.get("/api/progress", params={"today": TODAY}).json()["data"]
+    day = client.get(f"/api/day/{TODAY}").json()["data"]
+
+    assert fresh == client.get("/api/profile").json()["data"]
+    assert (fresh["name"], fresh["onboarded"], fresh["goals"]["budget"]) == ("", False, 25.0)
+    assert client.get("/api/inventory").json()["data"]["items"] == []
+    assert client.get("/api/plan").json()["data"]["plan"] is None
+    assert progress == {"xp": 0, "level": 1, "streak": 0, "meals_cooked": 0, "items_rescued": 0}
+    assert (day["entries"], day["water"]) == ([], 0)
+
+
+@pytest.mark.unit
+def test_reset_keeps_cached_map_lookups(tmp_path: Path) -> None:
+    repo = sqlite_repository(tmp_path / "db.sqlite3")
+    repo.put_doc("places:40.50,-74.45", "cached")
+    repo.put_doc("profile", "{}")
+
+    repo.reset()
+
+    assert repo.get_doc("places:40.50,-74.45") == "cached"
+    assert repo.get_doc("profile") is None

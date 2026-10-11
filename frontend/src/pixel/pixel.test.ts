@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { tabOf, TABS } from "../nav";
 import { parseFavorites } from "../screens/GoalSheets";
-import { AGENT_SPRITES, ICONS } from "./art";
+import { AGENT_SPRITES, ICONS, PROPS } from "./art";
 import { hardenPixels } from "./pixelate";
 import { drawSprite, type Sprite } from "./sprite";
 import { buildTownMap, MAP_HEIGHT, MAP_WIDTH, STORE_POSITION } from "./townMap";
@@ -36,7 +36,7 @@ describe("drawSprite", () => {
 });
 
 describe("pixel art data", () => {
-  const sprites: Array<[string, Sprite]> = Object.entries({ ...AGENT_SPRITES, ...ICONS });
+  const sprites: Array<[string, Sprite]> = Object.entries({ ...AGENT_SPRITES, ...ICONS, ...PROPS });
 
   it.each(sprites)("%s has rows of equal width and only known colors", (_name, sprite) => {
     const widths = new Set(sprite.rows.map((row) => row.length));

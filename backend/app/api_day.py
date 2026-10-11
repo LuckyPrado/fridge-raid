@@ -36,6 +36,7 @@ MIN_YEAR = 2000
 MAX_YEAR = 2100
 NEARBY_REQUESTS_PER_MINUTE = 6
 CHAT_REQUESTS_PER_MINUTE = 20
+RESET_REQUESTS_PER_MINUTE = 6
 
 router = APIRouter(prefix="/api")
 write_limit = Depends(rate_limit(WRITE_REQUESTS_PER_MINUTE))
@@ -76,6 +77,13 @@ def get_profile(services: Services = Depends(get_services)) -> Envelope[Profile]
 def put_profile(profile: Profile, services: Services = Depends(get_services)) -> Envelope[Profile]:
     cleaned = profile.model_copy(update={"name": " ".join(profile.name.split())})
     return Envelope(data=tracker.save_profile(services.repository, cleaned))
+
+
+@router.post("/reset", response_model=Envelope[Profile], dependencies=[Depends(rate_limit(RESET_REQUESTS_PER_MINUTE))])
+def reset_everything(services: Services = Depends(get_services)) -> Envelope[Profile]:
+    """Start over: erase the fridge, plan, food log, progress, location, and preferences."""
+    services.repository.reset()
+    return Envelope(data=tracker.load_profile(services.repository))
 
 
 @router.get("/plan", response_model=Envelope[SavedPlan])

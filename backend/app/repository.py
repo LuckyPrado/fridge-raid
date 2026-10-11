@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_STATS_LIMIT = 500
 STREAK_LOOKBACK_DAYS = 120
 HYPERTABLES = ("raid_stats", "food_log")
+PLACES_CACHE_PREFIX = "places:"
 
 _INVENTORY_DDL = """
 CREATE TABLE IF NOT EXISTS inventory (
@@ -85,6 +86,8 @@ class Repository(Protocol):
     def get_doc(self, key: str) -> str | None: ...
 
     def put_doc(self, key: str, value: str) -> None: ...
+
+    def reset(self) -> None: ...
 
 
 class SqlRepository:
@@ -235,6 +238,16 @@ class SqlRepository:
         )
         with self._write_lock, closing(self._connect()) as conn:
             conn.cursor().execute(upsert, (key, value))
+            conn.commit()
+
+
+    def reset(self) -> None:
+        """Erase everything the player has saved. Cached map lookups are kept, since they are not personal."""
+        with self._write_lock, closing(self._connect()) as conn:
+            cursor = conn.cursor()
+            for table in ("inventory", "raid_stats", "food_log"):
+                cursor.execute(f"DELETE FROM {table}")
+            cursor.execute(f"DELETE FROM app_docs WHERE key NOT LIKE {self._ph}", (f"{PLACES_CACHE_PREFIX}%",))
             conn.commit()
 
 

@@ -17,7 +17,7 @@ from app.catalog import Catalog
 from app.deals import Store, stores_from_places
 from app.inventory_ops import cook_dish, new_item_id
 from app.optimizer import at_risk_items, rescued
-from app.repository import Repository, utc_now_iso
+from app.repository import PLACES_CACHE_PREFIX, Repository, utc_now_iso
 from app.schemas import (
     DaySummary,
     Dish,
@@ -126,7 +126,7 @@ def active_stores(repository: Repository, samples: Sequence[Store]) -> tuple[Sto
 
 def _places_key(lat: float, lon: float) -> str:
     """Cache key for a store search. Two decimals is about a kilometer, so one venue shares one entry."""
-    return f"places:{lat:.2f},{lon:.2f}"
+    return f"{PLACES_CACHE_PREFIX}{lat:.2f},{lon:.2f}"
 
 
 def cached_places(repository: Repository, lat: float, lon: float) -> tuple[StoreInfo, ...]:

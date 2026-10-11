@@ -143,7 +143,7 @@ export function Goals({ kitchen, go }: GoalsProps) {
       </div>
       <p className="fineprint">Self-set goals and estimated nutrition. This is not medical advice.</p>
 
-      {openSheet === "goals" && <GoalsSheet profile={profile} onSave={saveProfile} onClose={() => setOpenSheet(null)} />}
+      {openSheet === "goals" && <GoalsSheet profile={profile} onSave={saveProfile} onStartOver={kitchen.startOver} onClose={() => setOpenSheet(null)} />}
       {openSheet === "log" && <LogSheet onSave={logFood} onClose={() => setOpenSheet(null)} />}
     </div>
   );

@@ -25,42 +25,6 @@
     var(--px) 0 0 0 var(--ink);
 }
 
-.hero {
-  --fill: var(--mint);
-  --edge: var(--leaf);
-  --drop: var(--mint-deep);
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-2);
-  overflow: hidden;
-  min-height: 12.5rem;
-  padding: var(--space-4) 0 0 var(--space-4);
-}
-
-.hero-copy {
-  z-index: 1;
-  padding-bottom: var(--space-4);
-}
-
-.hero-hello {
-  color: var(--leaf);
-  font-family: var(--font-display);
-  font-size: var(--title-md);
-}
-
-.hero h2 {
-  margin-top: var(--space-2);
-  font-family: var(--font-title);
-  font-size: 2.25rem;
-  line-height: 0.95;
-}
-
-.hero-sub {
-  margin: var(--space-2) 0 var(--space-3);
-  color: var(--ink-soft);
-}
-
 .streak {
   background: var(--paper);
   color: var(--carrot);
@@ -69,54 +33,6 @@
     0 var(--px) 0 0 var(--ink),
     calc(-1 * var(--px)) 0 0 0 var(--ink),
     var(--px) 0 0 0 var(--ink);
-}
-
-.hero-scene {
-  position: relative;
-  align-self: end;
-  width: 10.5rem;
-  height: 9.5rem;
-}
-
-.hero-fridge {
-  position: absolute;
-  right: 0.75rem;
-  bottom: 2.75rem;
-  display: grid;
-  grid-template-rows: 2fr 3fr;
-  gap: var(--px);
-  width: 3.75rem;
-  height: 6.25rem;
-  padding: var(--px);
-  background: var(--ink);
-}
-
-.hero-fridge span {
-  background: var(--paper);
-  box-shadow: inset calc(-2 * var(--px)) 0 0 0 var(--line), inset calc(3 * var(--px)) calc(3 * var(--px)) 0 calc(-2 * var(--px)) var(--ink-soft);
-}
-
-.hero-party {
-  position: absolute;
-  z-index: 1;
-  bottom: 0.5rem;
-  left: 0;
-  display: flex;
-  align-items: flex-end;
-}
-
-.hero-party svg + svg {
-  margin-left: -0.75rem;
-}
-
-.hero-floor {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: -1rem;
-  height: 3rem;
-  background: repeating-conic-gradient(#e9c79a 0% 25%, #f6dcb6 0% 50%) 0 0 / 24px 24px;
-  box-shadow: 0 calc(-1 * var(--px)) 0 0 var(--leaf);
 }
 
 .quest {

@@ -36,21 +36,34 @@ const noSidewaysScroll = async (label) => {
 };
 const tab = (name) => page.getByRole("navigation", { name: "Main" }).getByRole("button", { name });
 
-// Start from an empty fridge so the walk is repeatable.
-await page.request.put(new URL("/api/inventory", APP_URL).href, { data: { items: [] } });
-const now = new Date();
-const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-await page.request.put(new URL(`/api/day/${today}/water`, APP_URL).href, { data: { glasses: 0 } });
-await page.request.put(new URL("/api/profile", APP_URL).href, { data: { name: "", goals: {} } });
-await page.request.delete(new URL("/api/nearby", APP_URL).href);
+// Start as a first-time player: nothing saved, no XP.
+await page.request.post(new URL("/api/reset", APP_URL).href);
 
 await page.goto(APP_URL);
 await page.getByRole("heading", { name: "Fridge Raid" }).waitFor();
-await shot("1-home");
-await noSidewaysScroll("home");
+await page.locator(".tower .room").nth(2).waitFor();
+await shot("0-welcome");
+await noSidewaysScroll("welcome");
+
+// The agents take turns asking questions.
+await page.getByRole("button", { name: "Meet your party" }).click();
+await page.getByLabel("Your name").fill("Alex");
+await page.getByRole("button", { name: "Tacos" }).click();
+await shot("0-setup-chef");
+await page.getByRole("button", { name: "Next" }).click();
+await page.getByRole("button", { name: "Shrimp" }).click();
+await page.getByRole("button", { name: "Next" }).click();
+await page.getByRole("button", { name: /Build muscle/ }).click();
+await shot("0-setup-nutritionist");
+await page.getByRole("button", { name: "Next" }).click();
+await page.getByRole("button", { name: "4 dinners" }).click();
+await shot("0-setup-shopper");
+await noSidewaysScroll("setup");
+await page.getByRole("button", { name: "Next" }).click();
+await page.getByRole("heading", { name: "Nice to meet you, Alex" }).waitFor();
+await page.getByRole("button", { name: "Scan my fridge" }).click();
 
 // Scan: the demo camera reads the sample dorm fridge.
-await page.getByRole("button", { name: "Scan my fridge" }).click();
 await page.getByRole("heading", { name: "Fridge scan" }).waitFor();
 await page.getByRole("button", { name: "Dorm Fridge" }).click();
 await shot("2-scan");
@@ -105,8 +118,8 @@ await page.getByRole("button", { name: "+ Log food" }).click();
 await page.getByLabel("What did you eat?").fill("Yogurt bowl");
 await page.getByRole("dialog").getByRole("button", { name: "Log food" }).click();
 await page.getByText("Logged by hand").first().waitFor();
+await page.getByText("No shrimp").waitFor();
 await page.getByRole("button", { name: "Edit goals", exact: true }).first().click();
-await page.getByLabel("Your name").fill("Alex");
 await page.getByLabel("Favorite foods").fill("tacos, pasta");
 await shot("8-goals-sheet");
 await page.getByRole("button", { name: "Save goals" }).click();
@@ -146,7 +159,7 @@ await page.locator(".chip", { hasText: "Weekly budget $40.00" }).waitFor();
 await page.getByRole("group", { name: "Who to talk to" }).getByRole("button", { name: "Chef" }).click();
 await page.getByLabel("Message to the Chef").fill("I hate mushrooms");
 await page.getByRole("button", { name: "Send" }).click();
-await page.locator(".chip", { hasText: "Avoiding: mushrooms" }).waitFor();
+await page.locator(".chip", { hasText: /Avoiding: .*mushrooms/ }).waitFor();
 await shot("14-chat");
 await noSidewaysScroll("chat");
 await tab("Goals").click();
@@ -164,6 +177,7 @@ await page.getByText("Hey, Alex").waitFor();
 await tab("Chef").click();
 await page.getByText("Cooked and logged").first().waitFor();
 await tab("Home").click();
+await page.locator(".tower .room").nth(2).waitFor();
 await shot("12-home-after");
 
 // A narrow phone still fits.

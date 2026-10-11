@@ -25,6 +25,7 @@ const NO_PROGRESS: Progress = { xp: 0, level: 1, streak: 0, meals_cooked: 0, ite
 
 export const DEFAULT_PROFILE: Profile = {
   name: "",
+  onboarded: false,
   goals: {
     budget: 25,
     diet: "none",
@@ -81,6 +82,8 @@ export interface Kitchen {
   shareLocation: () => Promise<string | null>;
   clearLocation: () => Promise<void>;
   chat: (agent: AgentId, message: string) => Promise<ChatReply | null>;
+  /** Erase everything saved and reload the app as a first-time player. */
+  startOver: () => Promise<void>;
 }
 
 const LOCATION_TIMEOUT_MS = 12000;
@@ -271,6 +274,22 @@ export function useKitchen(): Kitchen {
     }
   }, [today]);
 
+  const startOver = useCallback(async () => {
+    try {
+      await api.reset();
+    } catch (error: unknown) {
+      setProblem(`Nothing was erased. ${errorMessage(error)}`);
+      return;
+    }
+    try {
+      window.sessionStorage.clear();
+      window.localStorage.clear();
+    } catch {
+      // Storage can be blocked. The server data is already gone, which is what matters.
+    }
+    window.location.reload();
+  }, []);
+
   return {
     isLoading,
     hasLoaded,
@@ -297,5 +316,6 @@ export function useKitchen(): Kitchen {
     shareLocation,
     clearLocation,
     chat,
+    startOver,
   };
 }

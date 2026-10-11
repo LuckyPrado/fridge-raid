@@ -136,6 +136,8 @@ class InventoryPayload(BaseModel):
 
 class Profile(Frozen):
     name: str = Field(default="", max_length=24)
+    # False until the player has answered the party's first questions.
+    onboarded: bool = False
     goals: Goals = Goals()
 
 

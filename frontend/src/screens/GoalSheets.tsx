@@ -25,15 +25,17 @@ function clamp(value: number, low: number, high: number): number {
 type GoalsSheetProps = {
   profile: Profile;
   onSave: (profile: Profile) => Promise<boolean>;
+  onStartOver: () => Promise<void>;
   onClose: () => void;
 };
 
-export function GoalsSheet({ profile, onSave, onClose }: GoalsSheetProps) {
+export function GoalsSheet({ profile, onSave, onStartOver, onClose }: GoalsSheetProps) {
   const [name, setName] = useState(profile.name);
   const [goals, setGoals] = useState(profile.goals);
   const [favorites, setFavorites] = useState(profile.goals.favorites.join(", "));
   const [avoid, setAvoid] = useState(profile.goals.avoid.join(", "));
   const [isSaving, setIsSaving] = useState(false);
+  const [isConfirmingReset, setIsConfirmingReset] = useState(false);
 
   const setNumber = (key: keyof Profile["goals"]) => (event: { target: { value: string } }) =>
     setGoals({ ...goals, [key]: Number(event.target.value) });
@@ -42,6 +44,7 @@ export function GoalsSheet({ profile, onSave, onClose }: GoalsSheetProps) {
     event.preventDefault();
     setIsSaving(true);
     const next: Profile = {
+      ...profile,
       name: name.trim(),
       goals: {
         ...goals,
@@ -107,6 +110,17 @@ export function GoalsSheet({ profile, onSave, onClose }: GoalsSheetProps) {
         </Field>
         <div className="form-actions">
           <Button type="submit" disabled={isSaving}>Save goals</Button>
+        </div>
+        <div className="danger-zone">
+          <p className="fineprint">Start over erases your fridge, plan, food log, XP and preferences. It cannot be undone.</p>
+          {isConfirmingReset ? (
+            <div className="form-actions">
+              <Button tone="paper" onClick={() => setIsConfirmingReset(false)}>Keep my data</Button>
+              <Button tone="butter" onClick={() => void onStartOver()}>Yes, erase everything</Button>
+            </div>
+          ) : (
+            <Button tone="paper" onClick={() => setIsConfirmingReset(true)}>Start over</Button>
+          )}
         </div>
       </form>
     </Sheet>

@@ -123,6 +123,7 @@ export interface RaidStat {
 
 export interface Profile {
   name: string;
+  onboarded: boolean;
   goals: Goals;
 }
 

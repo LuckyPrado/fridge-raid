@@ -57,6 +57,7 @@ export const api = {
   demoFridges: (): Promise<DemoFridge[]> => request("/api/demo-fridges"),
   profile: (): Promise<Profile> => request("/api/profile"),
   saveProfile: (profile: Profile): Promise<Profile> => request("/api/profile", json("PUT", profile)),
+  reset: (): Promise<Profile> => request("/api/reset", { method: "POST" }),
   plan: (): Promise<SavedPlan> => request("/api/plan"),
   cook: (dishId: string, day: string): Promise<CookResult> =>
     request("/api/cook", json("POST", { dish_id: dishId, day })),

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useKitchen } from "./hooks/useKitchen";
 import { useRaid } from "./hooks/useRaid";
 import { TABS, tabOf, type Screen, type TabId } from "./nav";
-import type { ChatMessage } from "./types";
+import type { ChatMessage, Profile } from "./types";
 import { AGENT_SPRITES, SPRITE_OUTLINE } from "./pixel/art";
 import { PixelSprite } from "./pixel/PixelSprite";
 import { Chat } from "./screens/Chat";
@@ -15,6 +15,7 @@ import { Huddle } from "./screens/Huddle";
 import { Plan } from "./screens/Plan";
 import { Recipe } from "./screens/Recipe";
 import { Scan } from "./screens/Scan";
+import { Setup } from "./screens/Setup";
 import { Shop } from "./screens/Shop";
 import { Button, Icon, IconButton } from "./ui/kit";
 
@@ -133,6 +134,29 @@ export function App() {
           <p>{kitchen.problem ?? "The kitchen did not load."}</p>
           <Button onClick={() => window.location.reload()}>Try again</Button>
         </div>
+      </div>
+    );
+  }
+
+  if (!kitchen.profile.onboarded) {
+    const handleFinish = async (profile: Profile) => {
+      const isSaved = await kitchen.saveProfile(profile);
+      if (isSaved) {
+        go({ name: "scan" });
+      }
+      return isSaved;
+    };
+    return (
+      <div className="phone is-immersive">
+        {kitchen.problem && (
+          <div className="problem" role="alert">
+            <p>{kitchen.problem}</p>
+            <IconButton icon="close" label="Dismiss" tone="plain" onClick={kitchen.clearProblem} />
+          </div>
+        )}
+        <main>
+          <Setup profile={kitchen.profile} onFinish={handleFinish} />
+        </main>
       </div>
     );
   }

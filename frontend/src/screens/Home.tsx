@@ -1,9 +1,15 @@
 import type { Kitchen } from "../hooks/useKitchen";
 import { capitalize, money, plural } from "../lib/food";
 import type { Go } from "../nav";
-import { AGENT_SPRITES, SPRITE_OUTLINE } from "../pixel/art";
-import { PixelSprite } from "../pixel/PixelSprite";
+import type { AgentId } from "../types";
 import { AgentBubble, Button, Chip, Icon, SectionTitle, SegBar } from "../ui/kit";
+import { Tower } from "../ui/Rooms";
+
+const ROOM_SCREENS: Record<AgentId, "goals" | "chef" | "shop"> = {
+  nutritionist: "goals",
+  chef: "chef",
+  bargain_hunter: "shop",
+};
 
 type HomeProps = {
   kitchen: Kitchen;
@@ -39,23 +45,6 @@ function shopperLine(kitchen: Kitchen): string {
   return `Your ${plural(plan.dishes.length, "dinner")} need just ${money(plan.total_cost)} in extras${where}.`;
 }
 
-function HeroScene() {
-  return (
-    <div className="hero-scene" aria-hidden="true">
-      <div className="hero-fridge">
-        <span />
-        <span />
-      </div>
-      <div className="hero-party">
-        <PixelSprite sprite={AGENT_SPRITES.chef} scale={3} outline={SPRITE_OUTLINE} />
-        <PixelSprite sprite={AGENT_SPRITES.nutritionist} scale={3} outline={SPRITE_OUTLINE} />
-        <PixelSprite sprite={AGENT_SPRITES.bargain_hunter} scale={3} outline={SPRITE_OUTLINE} />
-      </div>
-      <div className="hero-floor" />
-    </div>
-  );
-}
-
 export function Home({ kitchen, go }: HomeProps) {
   const { profile, progress, saved, status, day } = kitchen;
   const goals = profile.goals;
@@ -81,18 +70,18 @@ export function Home({ kitchen, go }: HomeProps) {
         </span>
       </header>
 
-      <section className="hero px-box">
-        <div className="hero-copy">
-          <p className="hero-hello">{greeting}</p>
-          <h2>Good food. Great quests.</h2>
-          <p className="hero-sub">Your little team for a healthier everyday.</p>
+      <header className="greeting">
+        <p className="greeting-hello">{greeting}</p>
+        <h2>Good food. Great quests.</h2>
+        <p className="greeting-row">
           <span className="streak">
             <Icon name="flame" scale={1.5} />
             {`${progress.streak} day streak`}
           </span>
-        </div>
-        <HeroScene />
-      </section>
+          Tap a room to visit.
+        </p>
+      </header>
+      <Tower onOpen={(agent) => go({ name: ROOM_SCREENS[agent] })} />
 
       <div className="chip-row">
         {goals.diet !== "none" && <Chip>{capitalize(goals.diet)}</Chip>}
