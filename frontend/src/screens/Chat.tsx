@@ -36,11 +36,12 @@ export function Chat({ kitchen, go, agent: startAgent, messages, onMessages, onP
   const [text, setText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const end = useRef<HTMLDivElement>(null);
+  const thread = messages.filter((message) => message.thread === agent);
   const hasChanges = messages.some((message) => message.changes.length > 0);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
-  }, [messages.length, isSending]);
+  }, [thread.length, isSending, agent]);
 
   const send = async (message: string) => {
     const clean = message.trim().slice(0, MAX_MESSAGE_CHARS);
@@ -49,11 +50,11 @@ export function Chat({ kitchen, go, agent: startAgent, messages, onMessages, onP
     }
     setText("");
     setIsSending(true);
-    onMessages((current) => [...current, { id: Date.now(), from: "you", text: clean, changes: [] }]);
+    onMessages((current) => [...current, { id: Date.now(), thread: agent, from: "you", text: clean, changes: [] }]);
     const reply = await kitchen.chat(agent, clean);
     setIsSending(false);
     if (reply) {
-      onMessages((current) => [...current, { id: Date.now() + 1, from: reply.agent, text: reply.reply, changes: reply.changes }]);
+      onMessages((current) => [...current, { id: Date.now() + 1, thread: agent, from: reply.agent, text: reply.reply, changes: reply.changes }]);
     }
   };
 
@@ -83,7 +84,7 @@ export function Chat({ kitchen, go, agent: startAgent, messages, onMessages, onP
 
       <div className="chat-log" aria-live="polite">
         <AgentBubble agent={agent}>{OPENERS[agent]}</AgentBubble>
-        {messages.map((message) =>
+        {thread.map((message) =>
           message.from === "you" ? (
             <p key={message.id} className="chat-you px-box">{message.text}</p>
           ) : (

@@ -46,7 +46,7 @@ Rules for the fields you return:
 - A food the player dislikes, cannot eat, or is allergic to goes in "add_avoid".
 - "add_to_grocery": foods the player asked you to put on their grocery or shopping list. Otherwise empty.
 - "remove_from_grocery": foods the player asked you to take off that list. Otherwise empty.
-- "swap_recipe": true only when the player asks for a different recipe than the next planned dinner.
+- "swap_recipe": true only when the player asks for a new, different or additional recipe.
 - "add_water": glasses of water the player says they just drank, otherwise 0.
 - Change only what the player asked for. Never invent preferences."""
 
@@ -326,7 +326,7 @@ def _offline_outcome(agent: str, message: str, profile: Profile, facts: ChatFact
     elif grocery or ungrocery:
         reply = "On it."
     elif draft.swap_recipe:
-        reply = "Fine, fine! Let me think of something else."
+        reply = "One more idea, coming up."
     elif water:
         reply = "Good. Water counts."
     else:

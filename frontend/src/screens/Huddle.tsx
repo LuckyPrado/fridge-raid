@@ -2,15 +2,13 @@ import { useEffect, useState } from "react";
 
 import type { RaidControls } from "../hooks/useRaid";
 import { money, plural } from "../lib/food";
-import { filledSegments } from "../lib/plan";
 import { waitingOn, type DishEntry, type RaidState } from "../lib/raid";
 import type { Go } from "../nav";
 import { AGENT_NAMES } from "../pixel/art";
 import type { AgentId } from "../types";
-import { AgentBubble, Button, IconButton, SectionTitle, SegBar } from "../ui/kit";
+import { AgentBubble, Button, IconButton, SectionTitle } from "../ui/kit";
 
 const AGENTS: readonly AgentId[] = ["chef", "nutritionist", "bargain_hunter"];
-const RESCUE_SEGMENTS = 10;
 
 const WORKING_LINES: Record<AgentId, string> = {
   chef: "Chef is dreaming up recipes",
@@ -60,7 +58,6 @@ function stampOf(entry: DishEntry, state: RaidState): { text: string; tone: stri
 
 export function Huddle({ raid, go, onRetry }: HuddleProps) {
   const state = raid.raid;
-  const saved = state.bossMax - state.bossHp;
   const isSettled = state.phase === "settled";
   const isFailed = state.phase === "failed";
   const planned = state.plan?.dishes.length ?? 0;
@@ -94,19 +91,6 @@ export function Huddle({ raid, go, onRetry }: HuddleProps) {
           </div>
         </section>
       )}
-
-      <section className="rescue px-box px-peach">
-        <div className="rescue-head">
-          <p>Food about to spoil</p>
-          <strong>{`${money(saved)} of ${money(state.bossMax)} saved`}</strong>
-        </div>
-        <SegBar
-          tone="carrot"
-          filled={filledSegments(saved, state.bossMax, RESCUE_SEGMENTS)}
-          total={RESCUE_SEGMENTS}
-          label={`${money(saved)} of ${money(state.bossMax)} of expiring food saved`}
-        />
-      </section>
 
       <div className="huddle-party" aria-live="polite">
         {AGENTS.map((agent) => (

@@ -93,27 +93,54 @@ def test_offline_reader_spots_requests_for_action(message: str, field: str, expe
 
 
 @pytest.mark.integration
-def test_the_chef_swaps_the_next_dinner_and_the_cart_follows(client: TestClient) -> None:
-    before = _plan(client)
-    first = before["dishes"][0]["name"]
+def test_the_chef_adds_a_favorite_and_keeps_every_planned_dinner(client: TestClient) -> None:
+    before = _plan(client, favorites=["pasta"])
+    old_names = [dish["name"] for dish in before["dishes"]]
+    client.put("/api/profile", json={"goals": {"favorites": ["pasta"]}})
 
     answer = _say(client, "chef", "Give me a different recipe")
     after = client.get("/api/plan").json()["data"]["plan"]
     names = [dish["name"] for dish in after["dishes"]]
 
-    assert answer["changes"] == [f"New recipe: {names[0]}"]
-    assert first in answer["reply"] and names[0] in answer["reply"]
-    assert first not in names and len(names) == len(before["dishes"])
+    assert names[: len(old_names)] == old_names, "nothing already planned may be removed"
+    assert len(names) == len(old_names) + 1
+    assert "Pasta" in names[-1] and "You love pasta" in answer["reply"]
+    assert answer["changes"] == [f"New recipe: {names[-1]}"]
     assert len({dish["id"] for dish in after["dishes"]}) == len(names)
     assert after["total_cost"] == round(sum(line["cost"] for line in after["cart"]), 2)
-    assert after["store"] == before["store"]
 
 
 @pytest.mark.integration
-def test_swapping_with_no_plan_says_so(client: TestClient) -> None:
+def test_asking_for_a_recipe_with_no_plan_says_so(client: TestClient) -> None:
     answer = _say(client, "chef", "another recipe please")
 
-    assert answer["changes"] == [] and "no planned dinner" in answer["reply"]
+    assert answer["changes"] == [] and "no new dinner" in answer["reply"]
+
+
+@pytest.mark.integration
+def test_a_recipe_can_be_removed_and_the_cart_shrinks_with_it(client: TestClient) -> None:
+    before = _plan(client)
+    target = before["dishes"][-1]
+
+    after = client.delete(f"/api/plan/dish/{target['id']}").json()["data"]
+    missing = client.delete(f"/api/plan/dish/{target['id']}")
+
+    names = [dish["name"] for dish in after["plan"]["dishes"]]
+    assert target["name"] not in names and len(names) == len(before["dishes"]) - 1
+    assert after["plan"]["total_cost"] <= before["total_cost"]
+    assert client.get("/api/plan").json()["data"] == after
+    assert missing.status_code == 404
+
+
+@pytest.mark.integration
+def test_removing_a_cooked_recipe_forgets_that_it_was_cooked(client: TestClient) -> None:
+    plan = _plan(client)
+    first = plan["dishes"][0]["id"]
+    client.post("/api/cook", json={"dish_id": first, "day": TODAY})
+
+    after = client.delete(f"/api/plan/dish/{first}").json()["data"]
+
+    assert after["cooked"] == []
 
 
 @pytest.mark.integration

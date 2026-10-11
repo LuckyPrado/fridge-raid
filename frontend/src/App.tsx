@@ -157,7 +157,8 @@ export function App() {
         <main>
           <Setup
             profile={kitchen.profile}
-            nearbyStores={kitchen.origin ? kitchen.stores.map((entry) => entry.store.name) : []}
+            origin={kitchen.origin}
+            nearbyStores={kitchen.origin ? kitchen.stores.map((entry) => entry.store) : []}
             onLocate={kitchen.shareLocation}
             onFinish={handleFinish}
           />

@@ -75,6 +75,8 @@ export const api = {
   saveProfile: (profile: Profile): Promise<Profile> => request("/api/profile", json("PUT", profile)),
   reset: (): Promise<Profile> => request("/api/reset", { method: "POST" }),
   plan: (): Promise<SavedPlan> => request("/api/plan"),
+  removeDish: (dishId: string): Promise<SavedPlan> =>
+    request(`/api/plan/dish/${encodeURIComponent(dishId)}`, { method: "DELETE" }),
   cook: (dishId: string, day: string): Promise<CookResult> =>
     request("/api/cook", json("POST", { dish_id: dishId, day })),
   day: (day: string): Promise<DaySummary> => request(`/api/day/${day}`),

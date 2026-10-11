@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 
 import type { Kitchen } from "../hooks/useKitchen";
 import { api } from "../lib/api";
-import { amountLabel, capitalize, money, packLabel, plural } from "../lib/food";
-import { cartLineFor, checkIngredients, dishesUsing, readiness, whySuggested, type IngredientCheck } from "../lib/plan";
+import { amountLabel, capitalize, money, plural } from "../lib/food";
+import { checkIngredients, readiness, whySuggested, type IngredientCheck } from "../lib/plan";
 import type { Go } from "../nav";
-import type { CartLine, Dish, Quote } from "../types";
+import type { Quote } from "../types";
 import { AgentBubble, Button, Chip, Icon, ScreenHeader, SectionTitle } from "../ui/kit";
 import { DishArt } from "./Chef";
 
@@ -30,23 +30,6 @@ function IngredientRow({ check, isCooked }: { check: IngredientCheck; isCooked: 
       {status === "use-soon" && !isCooked && <Chip tone="peach">Use soon</Chip>}
       <span className="ingredient-amount">{amount}</span>
     </li>
-  );
-}
-
-function BuyCard({ line, dish, dishes }: { line: CartLine; dish: Dish; dishes: readonly Dish[] }) {
-  const sharedWith = dishesUsing(line, dishes).filter((name) => name !== dish.name);
-  return (
-    <div className="buy px-box px-butter">
-      <Icon name="basket" />
-      <div className="buy-text">
-        <strong>{`${capitalize(line.name)} · need to buy`}</strong>
-        <small>
-          {`${packLabel(line.packs, line.pack_size, line.unit, line.name)} · ${money(line.cost)}`}
-          {sharedWith.length > 0 ? ` · shared with ${sharedWith[0]}` : ""}
-        </small>
-      </div>
-      <span className="buy-flag">In plan</span>
-    </div>
   );
 }
 
@@ -78,6 +61,7 @@ function WhereToBuy({ quote, isListed, onAdd }: WhereToBuyProps) {
 export function Recipe({ kitchen, dishId, go, notify }: RecipeProps) {
   const { saved, inventory, day, profile, cook } = kitchen;
   const [isCooking, setIsCooking] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const dishes = saved.plan?.dishes ?? [];
   const dish = dishes.find((entry) => entry.id === dishId);
@@ -111,14 +95,21 @@ export function Recipe({ kitchen, dishId, go, notify }: RecipeProps) {
   const isCooked = saved.cooked.includes(dish.id);
   const checks = checkIngredients(dish, inventory);
   const ready = readiness(checks);
-  const toBuy = ready.toBuy
-    .map((name) => cartLineFor(name, saved.plan?.cart ?? []))
-    .filter((line): line is CartLine => line !== undefined);
   const xp = XP_PER_MEAL + XP_PER_RESCUE * ready.useSoon.length;
   const proteinAfter = day.protein_g + dish.protein_g;
   const coach = isCooked
     ? `Logged. You are at ${day.protein_g} g of your ${profile.goals.daily_protein_g} g protein goal today.`
     : `This adds ${dish.protein_g} g protein. That takes today from ${day.protein_g} g to ${proteinAfter} g of your ${profile.goals.daily_protein_g} g goal.`;
+
+  const handleRemove = async () => {
+    setIsRemoving(true);
+    const isRemoved = await kitchen.removeDish(dish.id);
+    setIsRemoving(false);
+    if (isRemoved) {
+      notify(`Removed ${dish.name}`);
+      go({ name: "chef" });
+    }
+  };
 
   const handleCook = async () => {
     setIsCooking(true);
@@ -166,7 +157,6 @@ export function Recipe({ kitchen, dishId, go, notify }: RecipeProps) {
           <IngredientRow key={check.ingredient.name} check={check} isCooked={isCooked} />
         ))}
       </ul>
-      {!isCooked && toBuy.map((line) => <BuyCard key={line.name} line={line} dish={dish} dishes={dishes} />)}
       {!isCooked && quotes.length > 0 && (
         <>
           <SectionTitle title="Where to get what is missing" aside={plural(quotes.length, "item")} />
@@ -197,6 +187,7 @@ export function Recipe({ kitchen, dishId, go, notify }: RecipeProps) {
         </>
       )}
       <p className="fineprint">Nutrition is estimated per serving. XP is earned when you log a cooked meal.</p>
+      <Button tone="paper" isBlock disabled={isRemoving} onClick={handleRemove}>Remove this recipe from my plan</Button>
 
       <div className="cta-bar">
         <Button size="lg" icon={isCooked ? "check" : "play"} isBlock disabled={isCooked || isCooking} onClick={handleCook}>

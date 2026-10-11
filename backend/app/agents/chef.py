@@ -194,6 +194,15 @@ class OfflineChef:
         ]
         return sorted(eligible, key=lambda recipe: self._score(recipe, ctx), reverse=True)
 
+    def ideas(self, ctx: RaidContext, exclude: Sequence[str]) -> list[Dish]:
+        """Every recipe that fits the diet, the avoid list and the per-meal limits, best first."""
+        goals = ctx.goals
+        return [
+            recipe
+            for recipe in self._ranked(ctx, exclude=exclude)
+            if recipe.calories <= goals.max_calories and recipe.sodium_mg <= goals.max_sodium_mg
+        ]
+
     async def propose(self, ctx: RaidContext, count: int) -> tuple[Dish, ...]:
         return tuple(self._ranked(ctx, exclude=())[:count])
 

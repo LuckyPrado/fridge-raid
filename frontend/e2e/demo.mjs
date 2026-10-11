@@ -173,6 +173,7 @@ await page.locator(".chip", { hasText: "Weekly budget $40.00" }).waitFor();
 await page.getByRole("group", { name: "Who to talk to" }).getByRole("button", { name: "Chef" }).click();
 await page.getByRole("button", { name: "Give me a different recipe" }).click();
 await page.locator(".chip", { hasText: /New recipe: / }).waitFor();
+check(await page.locator(".chat-you").count() === 1, "chat: the Shopper thread leaked into the Chef thread");
 await page.getByLabel("Message to the Chef").fill("I hate mushrooms");
 await page.getByRole("button", { name: "Send" }).click();
 await page.locator(".chip", { hasText: /Avoiding: .*mushrooms/ }).waitFor();

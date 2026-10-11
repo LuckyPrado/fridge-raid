@@ -81,6 +81,8 @@ export interface Kitchen {
   saveProfile: (profile: Profile) => Promise<boolean>;
   reloadPlan: () => Promise<void>;
   cook: (dishId: string) => Promise<CookResult | null>;
+  /** Take a recipe out of the plan. Resolves to whether it worked. */
+  removeDish: (dishId: string) => Promise<boolean>;
   logFood: (entry: FoodLogInput) => Promise<boolean>;
   setWater: (glasses: number) => Promise<void>;
   /** Ask the phone for its location and switch the Shopper to real stores nearby. Returns a problem message or null. */
@@ -265,6 +267,16 @@ export function useKitchen(): Kitchen {
     }
   }, [today]);
 
+  const removeDish = useCallback(async (dishId: string) => {
+    try {
+      setSaved(await api.removeDish(dishId));
+      return true;
+    } catch (error: unknown) {
+      setProblem(`That recipe was not removed. ${errorMessage(error)}`);
+      return false;
+    }
+  }, []);
+
   const logFood = useCallback(async (entry: FoodLogInput) => {
     try {
       setDay(await api.logFood(today, entry));
@@ -433,6 +445,7 @@ export function useKitchen(): Kitchen {
     saveProfile,
     reloadPlan,
     cook,
+    removeDish,
     logFood,
     setWater,
     shareLocation,

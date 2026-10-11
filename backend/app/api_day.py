@@ -10,9 +10,10 @@ from pydantic import BaseModel
 
 from app import demo, grocery, tracker
 from app.chat import ChatFacts, converse_full
+from app.agents.chef import matches_favorite
 from app.catalog import normalize_name
 from app.optimizer import at_risk_items
-from app.replan import swap_next_dish
+from app.replan import PlanFull, add_dish, remove_dish
 from app.api import WRITE_REQUESTS_PER_MINUTE, Envelope
 from app.deals import store_deals
 from app.places import PlacesError, find_stores
@@ -99,6 +100,18 @@ def reset_everything(services: Services = Depends(get_services)) -> Envelope[Pro
 @router.get("/plan", response_model=Envelope[SavedPlan])
 def get_plan(services: Services = Depends(get_services)) -> Envelope[SavedPlan]:
     return Envelope(data=tracker.load_plan(services.repository))
+
+
+@router.delete("/plan/dish/{dish_id}", response_model=Envelope[SavedPlan], dependencies=[write_limit])
+def delete_dish(
+    dish_id: str = Path(min_length=1, max_length=16), services: Services = Depends(get_services)
+) -> Envelope[SavedPlan]:
+    """Take one recipe out of the plan and re-price the shopping list."""
+    stores = tracker.active_stores(services.repository, services.stores)
+    updated = remove_dish(services.repository, services.catalog, stores, dish_id)
+    if updated is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That recipe is not in your current plan.")
+    return Envelope(data=updated)
 
 
 @router.post("/cook", response_model=Envelope[CookResult], dependencies=[write_limit])
@@ -269,15 +282,19 @@ async def chat(
         done += await asyncio.to_thread(_remove_from_grocery, services, outcome.ungrocery)
     if outcome.swap_recipe:
         stores = await asyncio.to_thread(tracker.active_stores, services.repository, services.stores)
-        swap = await swap_next_dish(
-            services.repository, services.catalog, stores, services.party_for(is_demo), services.offline_party,
-            outcome.profile.goals,
-        )
-        if swap is None:
-            reply = "There is no planned dinner to swap, or I am out of ideas that fit your goals."
+        try:
+            fresh = await add_dish(
+                services.repository, services.catalog, stores, services.recipe_chef, outcome.profile.goals
+            )
+        except PlanFull:
+            fresh = None
+        if fresh is None:
+            reply = "I have no new dinner that fits your goals right now. Scan your fridge or loosen a goal."
         else:
-            reply = f"{reply} How about {swap.added}?" if not is_demo and services.llm else f"Out goes {swap.removed}. How about {swap.added}?"
-            done.append(f"New recipe: {swap.added}")
+            loved = [food for food in outcome.profile.goals.favorites if matches_favorite(fresh, [food])]
+            because = f" You love {loved[0]}, so this one is for you." if loved else ""
+            reply = f"How about {fresh.name}?{because} I added it and kept everything else."
+            done.append(f"New recipe: {fresh.name}")
     if outcome.water and day:
         summary = await asyncio.to_thread(_add_water, services, day, outcome.water)
         done.append(f"Water: {summary} glasses today")

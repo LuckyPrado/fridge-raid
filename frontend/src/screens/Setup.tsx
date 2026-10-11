@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 
 import { capitalize } from "../lib/food";
 import { boundedNumber, dailyTargets, heightCm, HEIGHT_LIMITS, type Aim, type Sex } from "../lib/targets";
-import type { AgentId, Diet, Profile } from "../types";
+import type { AgentId, Diet, Origin, Profile, StoreInfo } from "../types";
 import { AgentBubble, Button } from "../ui/kit";
 import { Room, Tower } from "../ui/Rooms";
 import { parseFavorites } from "./GoalSheets";
@@ -16,6 +16,10 @@ const DIETS: ReadonlyArray<{ id: Diet; label: string }> = [
   { id: "halal", label: "Halal" },
 ];
 const STORES_NAMED = 3;
+
+// The street map library is large and only needed once a location is shared.
+const RealMap = lazy(() => import("./RealMap").then((module) => ({ default: module.RealMap })));
+const ignorePick = () => undefined;
 const AIMS: ReadonlyArray<{ id: Aim; label: string }> = [
   { id: "lighter", label: "Eat a little lighter" },
   { id: "balanced", label: "Stay balanced" },
@@ -46,15 +50,17 @@ const STEPS: readonly Step[] = [
 
 type SetupProps = {
   profile: Profile;
-  /** Names of real stores found near the player, once they share a location. */
-  nearbyStores: readonly string[];
+  /** Where the store search was centered, once the player shares a location. */
+  origin: Origin | null;
+  /** The real stores found near the player. Empty until a location is shared. */
+  nearbyStores: readonly StoreInfo[];
   /** Ask the phone for its location and find stores. Resolves to a problem message, or null. */
   onLocate: () => Promise<string | null>;
   onFinish: (profile: Profile) => Promise<boolean>;
 };
 
 /** First run: the three agents introduce themselves and take turns asking what the player wants. */
-export function Setup({ profile, nearbyStores, onLocate, onFinish }: SetupProps) {
+export function Setup({ profile, origin, nearbyStores, onLocate, onFinish }: SetupProps) {
   const [step, setStep] = useState(0);
   const [name, setName] = useState(profile.name);
   const [favoritesText, setFavoritesText] = useState(profile.goals.favorites.join(", "));
@@ -213,11 +219,16 @@ export function Setup({ profile, nearbyStores, onLocate, onFinish }: SetupProps)
       {step === 4 && (
         <div className="setup-question">
           <h2>Stores near you</h2>
-          {nearbyStores.length > 0 ? (
-            <section className="target px-box px-butter" aria-live="polite">
-              <strong>{`${nearbyStores.length} stores found`}</strong>
-              <small>{`${nearbyStores.slice(0, STORES_NAMED).join(", ")}${nearbyStores.length > STORES_NAMED ? " and more" : ""}. I will price your list at each one.`}</small>
-            </section>
+          {origin && nearbyStores.length > 0 ? (
+            <>
+              <Suspense fallback={<div className="real-map px-box" />}>
+                <RealMap origin={origin} stores={nearbyStores} pickedId={nearbyStores[0].id} onPick={ignorePick} />
+              </Suspense>
+              <section className="target px-box px-butter" aria-live="polite">
+                <strong>{`${nearbyStores.length} stores found`}</strong>
+                <small>{`${nearbyStores.slice(0, STORES_NAMED).map((store) => store.name).join(", ")}${nearbyStores.length > STORES_NAMED ? " and more" : ""}. I will price your list at each one.`}</small>
+              </section>
+            </>
           ) : (
             <>
               <Button tone="butter" icon="pin" isBlock disabled={isLocating} onClick={handleLocate}>

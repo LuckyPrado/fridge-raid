@@ -194,6 +194,8 @@ export interface ChatReply {
 
 export interface ChatMessage {
   id: number;
+  /** Whose conversation this line belongs to. Each agent has its own. */
+  thread: AgentId;
   from: "you" | AgentId;
   text: string;
   changes: string[];

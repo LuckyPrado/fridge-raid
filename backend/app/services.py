@@ -40,6 +40,8 @@ class Services:
     offline_party: Party
     demo_fridges: tuple[DemoFridge, ...]
     stores: tuple[Store, ...] = ()
+    # The built-in recipe book, used for instant suggestions outside a full planning round.
+    recipe_chef: OfflineChef | None = None
 
     def party_for(self, force_offline: bool) -> Party:
         if force_offline or self.live_party is None:
@@ -69,9 +71,10 @@ def build_services(
     settings: Settings, repository: Repository | None = None, llm: LLM | None = None
 ) -> Services:
     catalog = load_catalog(DATA_DIR / "prices.json")
+    recipe_chef = OfflineChef(load_recipes(DATA_DIR / "recipes.json"))
     offline_party = Party(
         name="offline",
-        chef=OfflineChef(load_recipes(DATA_DIR / "recipes.json")),
+        chef=recipe_chef,
         nutritionist=OfflineNutritionist(),
         bargain_hunter=OfflineBargainHunter(),
     )
@@ -94,6 +97,7 @@ def build_services(
         offline_party=offline_party,
         demo_fridges=load_demo_fridges(DATA_DIR / "demo" / "fridges.json"),
         stores=load_stores(DATA_DIR / "stores.json", catalog),
+        recipe_chef=recipe_chef,
     )
 
 
