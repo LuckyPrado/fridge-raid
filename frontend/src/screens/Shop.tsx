@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 
 import type { Kitchen } from "../hooks/useKitchen";
 import { capitalize, money, packLabel, plural, spriteForName } from "../lib/food";
@@ -7,15 +7,18 @@ import type { Go } from "../nav";
 import { PixelEmoji } from "../pixel/PixelEmoji";
 import { PixelSprite } from "../pixel/PixelSprite";
 import { buildTownMap, MAP_HEIGHT, MAP_WIDTH, STORE_POSITION } from "../pixel/townMap";
-import type { StoreInfo } from "../types";
-import { AgentBubble, Button, Chip, Icon, ScreenHeader } from "../ui/kit";
+import type { StoreDeals, StoreInfo, WeekPlan } from "../types";
+import { AgentBubble, Button, Chip, Icon, IconButton, ScreenHeader, SectionTitle } from "../ui/kit";
+
+// The street map library is large and only needed once a location is shared.
+const RealMap = lazy(() => import("./RealMap").then((module) => ({ default: module.RealMap })));
 
 const DEALS_SHOWN = 4;
-const SEARCH_RADIUS_MI = 2;
 
 type ShopProps = {
   kitchen: Kitchen;
   go: Go;
+  onPlan: () => void;
 };
 
 interface Offer {
@@ -32,7 +35,7 @@ function TownMap({ store }: { store: StoreInfo }) {
   const top = (STORE_POSITION.y / MAP_HEIGHT) * 100;
   return (
     <div className="town px-box">
-      <PixelSprite sprite={map} scale={1} className="town-map" label={`Map of ${store.neighborhood || "your area"}`} />
+      <PixelSprite sprite={map} scale={1} className="town-map" label="Sample neighborhood map" />
       <span className="town-pin" style={{ left: `${left}%`, top: `${top}%` }}>
         <Icon name="basket" scale={1} />
         {`${store.name} · ${store.distance_mi} mi`}
@@ -46,12 +49,56 @@ function shortDish(name: string): string {
   return name.split(" ").slice(-2).join(" ").toLowerCase();
 }
 
-export function Shop({ kitchen, go }: ShopProps) {
-  const { saved, stores } = kitchen;
-  const plan = saved.plan;
-  const store = plan?.store ?? stores[0]?.store;
+function planOffers(plan: WeekPlan): Offer[] {
+  return [...plan.cart]
+    .sort((a, b) => Number(isDeal(b)) - Number(isDeal(a)))
+    .map((line) => {
+      const users = dishesUsing(line, plan.dishes).map(shortDish);
+      const pack = packLabel(line.packs, line.pack_size, line.unit, line.name);
+      return {
+        name: line.name,
+        detail: users.length > 0 ? `${pack} · for ${users.slice(0, 2).join(" & ")}` : pack,
+        price: line.cost,
+        listPrice: line.list_cost,
+        isInPlan: true,
+      };
+    });
+}
 
-  if (!store) {
+function storeOffers(entry: StoreDeals): Offer[] {
+  return entry.deals.map((deal) => ({
+    name: deal.name,
+    detail: packLabel(1, deal.pack_size, deal.unit, deal.name),
+    price: deal.price,
+    listPrice: deal.list_price,
+    isInPlan: false,
+  }));
+}
+
+function shopperLine(plan: WeekPlan | null, picked: StoreDeals, isPlanStore: boolean, isReal: boolean): string {
+  const store = picked.store.name;
+  if (plan && isPlanStore && plan.cart.length === 0) {
+    return "Good news: your planned dinners need nothing from the store this week.";
+  }
+  if (plan && isPlanStore) {
+    return `One stop, more savings! I matched ${plural(plan.cart.filter(isDeal).length, "deal")} at ${store} to the meals in your plan.`;
+  }
+  if (plan) {
+    return `Your current plan shops somewhere else. Plan again and I will price your list at ${store} and the other stores here.`;
+  }
+  return isReal
+    ? `${store} is ${picked.store.distance_mi} mi from you. Scan your fridge and I will price your list there.`
+    : `${store} has ${plural(picked.deals.length, "weekly deal")}. Scan your fridge and I will match them to your meals.`;
+}
+
+export function Shop({ kitchen, go, onPlan }: ShopProps) {
+  const { saved, stores, origin, inventory, shareLocation, clearLocation } = kitchen;
+  const plan = saved.plan;
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationProblem, setLocationProblem] = useState<string | null>(null);
+
+  if (stores.length === 0) {
     return (
       <div className="screen">
         <ScreenHeader eyebrow="Your shopper · deal hunt" title="Good finds, close by" />
@@ -60,53 +107,86 @@ export function Shop({ kitchen, go }: ShopProps) {
     );
   }
 
-  const cart = plan?.cart ?? [];
-  const planOffers: Offer[] = [...cart]
-    .sort((a, b) => Number(isDeal(b)) - Number(isDeal(a)))
-    .map((line) => {
-      const users = dishesUsing(line, plan?.dishes ?? []).map(shortDish);
-      return {
-        name: line.name,
-        detail: `${packLabel(line.packs, line.pack_size, line.unit, line.name)}${users.length > 0 ? ` · for ${users.slice(0, 2).join(" & ")}` : ""}`,
-        price: line.cost,
-        listPrice: line.list_cost,
-        isInPlan: true,
-      };
-    });
-  const storeOffers: Offer[] = (stores.find((entry) => entry.store.id === store.id)?.deals ?? []).map((deal) => ({
-    name: deal.name,
-    detail: packLabel(1, deal.pack_size, deal.unit, deal.name),
-    price: deal.price,
-    listPrice: deal.list_price,
-    isInPlan: false,
-  }));
-  const offers = (planOffers.length > 0 ? planOffers : storeOffers).slice(0, DEALS_SHOWN);
-  const dealCount = cart.filter(isDeal).length;
+  const planStore = stores.find((entry) => entry.store.id === plan?.store?.id);
+  const picked = stores.find((entry) => entry.store.id === pickedId) ?? planStore ?? stores[0];
+  const isPlanStore = plan !== null && picked.store.id === plan.store?.id;
+  const isReal = origin !== null;
+  const offers = (plan && isPlanStore && plan.cart.length > 0 ? planOffers(plan) : storeOffers(picked)).slice(0, DEALS_SHOWN);
+  const needsReplan = plan !== null && !planStore && inventory.length > 0;
 
-  let line = `${store.name} has ${plural(storeOffers.length, "weekly deal")}. Scan your fridge and I will match them to your meals.`;
-  if (plan && cart.length === 0) {
-    line = "Good news: your planned dinners need nothing from the store this week.";
-  } else if (plan) {
-    line = `One stop, more savings! I matched ${plural(dealCount, "deal")} at ${store.name} to the meals in your plan.`;
-  }
+  const handleLocate = async () => {
+    setIsLocating(true);
+    setLocationProblem(null);
+    const problem = await shareLocation();
+    setIsLocating(false);
+    setLocationProblem(problem);
+    setPickedId(null);
+  };
+
+  const handleSamples = () => {
+    setPickedId(null);
+    setLocationProblem(null);
+    void clearLocation();
+  };
 
   return (
     <div className="screen">
-      <ScreenHeader eyebrow="Your shopper · deal hunt" title="Good finds, close by" />
-      <AgentBubble agent="bargain_hunter">{line}</AgentBubble>
+      <ScreenHeader
+        eyebrow="Your shopper · deal hunt"
+        title="Good finds, close by"
+        action={<IconButton icon="chat" label="Talk to the Shopper" onClick={() => go({ name: "chat", agent: "bargain_hunter" })} />}
+      />
+      <AgentBubble agent="bargain_hunter">{shopperLine(plan, picked, isPlanStore, isReal)}</AgentBubble>
 
       <div className="place">
-        <span><Icon name="pin" scale={1.5} />{store.neighborhood || "Your area"}</span>
-        <Chip tone="paper">{`Within ${SEARCH_RADIUS_MI} mi`}</Chip>
+        <span><Icon name="pin" scale={1.5} />{isReal ? picked.store.neighborhood || "Near you" : "Sample neighborhood"}</span>
+        <Chip tone="paper">{isReal ? "Real stores" : "Sample stores"}</Chip>
       </div>
-      <TownMap store={store} />
+
+      {isReal ? (
+        <Suspense fallback={<div className="real-map px-box" />}>
+          <RealMap origin={origin} stores={stores.map((entry) => entry.store)} pickedId={picked.store.id} onPick={setPickedId} />
+        </Suspense>
+      ) : (
+        <TownMap store={picked.store} />
+      )}
+
+      {locationProblem && <p className="scan-problem scan-problem-light" role="alert">{locationProblem}</p>}
+      {isReal ? (
+        <div className="locate-row">
+          <Button tone="paper" size="sm" icon="pin" disabled={isLocating} onClick={handleLocate}>
+            {isLocating ? "Finding you" : "Update my location"}
+          </Button>
+          <button type="button" className="text-link" onClick={handleSamples}>Use sample stores</button>
+        </div>
+      ) : (
+        <Button tone="butter" icon="pin" isBlock disabled={isLocating} onClick={handleLocate}>
+          {isLocating ? "Finding stores near you" : "Use my location"}
+        </Button>
+      )}
+
+      <SectionTitle title={isReal ? "Stores near you" : "Stores"} aside={plural(stores.length, "store")} />
+      <ul className="store-list">
+        {stores.map((entry) => {
+          const isPicked = entry.store.id === picked.store.id;
+          return (
+            <li key={entry.store.id}>
+              <button type="button" className={`store-row ${isPicked ? "is-picked" : ""}`} aria-pressed={isPicked} onClick={() => setPickedId(entry.store.id)}>
+                <span className="pitch-text">
+                  <strong>{entry.store.name}</strong>
+                  <small>{`${entry.store.distance_mi} mi · ${entry.store.walk_min} min walk`}</small>
+                </span>
+                {entry.store.id === plan?.store?.id && <span className="stamp stamp-ok">Your plan</span>}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
 
       <div className="store-head">
-        <h2>{store.name}</h2>
-        <span>{`${store.distance_mi} mi · ${store.walk_min} min walk`}</span>
+        <h2>{picked.store.name}</h2>
+        <span>{isPlanStore && plan && plan.cart.length > 0 ? "Your list here" : "Weekly deals"}</span>
       </div>
-      <p className="fineprint">Fictional store · sample weekly offers</p>
-
       <ul className="offers">
         {offers.map((offer) => (
           <li key={offer.name} className="offer px-box">
@@ -129,14 +209,20 @@ export function Shop({ kitchen, go }: ShopProps) {
         ))}
       </ul>
 
-      {plan ? (
+      {needsReplan && (
+        <Button size="lg" icon="next" isBlock onClick={onPlan}>Plan again with these stores</Button>
+      )}
+      {plan && !needsReplan && (
         <Button size="lg" icon="basket" isBlock onClick={() => go({ name: "plan" })}>
           {`View my ${money(plan.total_cost)} shopping plan`}
         </Button>
-      ) : (
-        <Button size="lg" icon="scan" isBlock onClick={() => go({ name: "scan" })}>Scan my fridge</Button>
       )}
-      <p className="fineprint">Concept prices and locations. No live deals or stock. Check prices in store.</p>
+      {!plan && <Button size="lg" icon="scan" isBlock onClick={() => go({ name: "scan" })}>Scan my fridge</Button>}
+      <p className="fineprint">
+        {isReal
+          ? "Store names and distances are real, from OpenStreetMap. Prices and deals are sample data, so check them in store."
+          : "Sample stores and prices. No live deals or stock."}
+      </p>
     </div>
   );
 }

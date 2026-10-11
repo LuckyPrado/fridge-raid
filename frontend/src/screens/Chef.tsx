@@ -4,7 +4,7 @@ import { checkIngredients, readiness } from "../lib/plan";
 import type { Go } from "../nav";
 import { PixelEmoji } from "../pixel/PixelEmoji";
 import type { Dish } from "../types";
-import { AgentBubble, Button, Chip, Icon, ScreenHeader, SectionTitle } from "../ui/kit";
+import { AgentBubble, Button, Chip, Icon, IconButton, ScreenHeader, SectionTitle } from "../ui/kit";
 
 const ART_TONES = 3;
 
@@ -69,7 +69,11 @@ export function Chef({ kitchen, go, onPlan }: ChefProps) {
 
   return (
     <div className="screen">
-      <ScreenHeader eyebrow="Your chef · recipe quests" title="Let's cook a little joy" />
+      <ScreenHeader
+        eyebrow="Your chef · recipe quests"
+        title="Let's cook a little joy"
+        action={<IconButton icon="chat" label="Talk to the Chef" onClick={() => go({ name: "chat", agent: "chef" })} />}
+      />
       <AgentBubble agent="chef">{intro}</AgentBubble>
 
       <div className="chip-row">

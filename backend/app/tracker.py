@@ -9,10 +9,12 @@ import logging
 import threading
 from dataclasses import dataclass
 from datetime import date, timedelta
+from typing import Sequence
 
 from pydantic import ValidationError
 
 from app.catalog import Catalog
+from app.deals import Store, stores_from_places
 from app.inventory_ops import cook_dish, new_item_id
 from app.optimizer import at_risk_items, rescued
 from app.repository import Repository, utc_now_iso
@@ -23,10 +25,12 @@ from app.schemas import (
     InventoryItem,
     LogEntry,
     LogRequest,
+    Nearby,
     Profile,
     Progress,
     RaidStat,
     SavedPlan,
+    StoreInfo,
     WeekPlan,
 )
 
@@ -34,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 PROFILE_KEY = "profile"
 PLAN_KEY = "plan"
+NEARBY_KEY = "nearby"
 XP_PER_MEAL = 20
 XP_PER_RESCUE = 20
 XP_PER_LEVEL = 100
@@ -94,6 +99,49 @@ def save_plan(repository: Repository, plan: WeekPlan) -> SavedPlan:
     saved = SavedPlan(plan=plan)
     repository.put_doc(PLAN_KEY, saved.model_dump_json())
     return saved
+
+
+def load_nearby(repository: Repository) -> Nearby | None:
+    raw = repository.get_doc(NEARBY_KEY)
+    if not raw:
+        return None
+    try:
+        return Nearby.model_validate_json(raw)
+    except ValidationError:
+        logger.warning("Stored nearby stores are unreadable; using the sample stores.")
+        return None
+
+
+def save_nearby(repository: Repository, nearby: Nearby | None) -> None:
+    repository.put_doc(NEARBY_KEY, nearby.model_dump_json() if nearby else "")
+
+
+def active_stores(repository: Repository, samples: Sequence[Store]) -> tuple[Store, ...]:
+    """Real nearby stores when the player has shared a location and some were found, otherwise the samples."""
+    nearby = load_nearby(repository)
+    if nearby is None or not nearby.stores:
+        return tuple(samples)
+    return stores_from_places(nearby.stores, samples)
+
+
+def _places_key(lat: float, lon: float) -> str:
+    """Cache key for a store search. Two decimals is about a kilometer, so one venue shares one entry."""
+    return f"places:{lat:.2f},{lon:.2f}"
+
+
+def cached_places(repository: Repository, lat: float, lon: float) -> tuple[StoreInfo, ...]:
+    """Stores found earlier around this spot, so a slow or busy map server is only needed once."""
+    raw = repository.get_doc(_places_key(lat, lon))
+    if not raw:
+        return ()
+    try:
+        return Nearby.model_validate_json(raw).stores
+    except ValidationError:
+        return ()
+
+
+def cache_places(repository: Repository, nearby: Nearby) -> None:
+    repository.put_doc(_places_key(nearby.origin.lat, nearby.origin.lon), nearby.model_dump_json())
 
 
 def next_dish(saved: SavedPlan) -> Dish | None:

@@ -23,7 +23,8 @@ People throw food away because they forget what they have, ingredients expire, a
 3. **Huddle.** The agents plan live on screen. The Chef pitches, the Nutritionist approves or vetoes, the Chef revises, for up to three rounds. The Shopper then settles the plan.
 4. **Cook.** Each recipe shows what you have, what to use first, what to buy, and the steps. Cooking it logs the meal, updates the fridge, and earns XP.
 5. **Track.** The Goals tab shows today against your targets, with a coaching line from the Nutritionist.
-6. **Shop.** The Shop tab shows the chosen store, the deals that apply, and a checklist under your weekly budget.
+6. **Shop.** Share your location and the Shop tab maps real grocery stores near you, from OpenStreetMap. The Shopper prices your list at each one and gives you a checklist under your weekly budget.
+7. **Talk.** Tell any agent what you want in plain words: "I hate mushrooms", "make my budget $40". It answers in character and updates your saved preferences.
 
 ## What is technically interesting
 
@@ -124,7 +125,8 @@ frontend/src/
 
 ## Known limits
 
-- Stores, deals, and prices are sample data in `backend/data`. No live prices or locations are fetched.
+- With a shared location, store names and distances are real (OpenStreetMap). Prices and deals are always sample data from `backend/data`, because no free live grocery price source exists.
+- A shared location is rounded to about 100 m before it is saved, and is sent to the public Overpass map service to find stores.
 - Nutrition numbers are estimates and not medical advice.
 - Single user, no accounts.
 - Quantities assume the catalog's unit for each item. There is no unit conversion.

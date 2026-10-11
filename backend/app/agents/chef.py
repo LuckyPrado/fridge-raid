@@ -31,6 +31,7 @@ Rules:
 - "pitch" is one punchy in-character line of at most 20 words. "description" is one plain sentence.
 - "steps" is 3 to 5 short cooking steps, one sentence or two each, in order.
 - When the player lists favorite foods, lean toward them, but never at the cost of wasting expiring food.
+- Never use a food the player avoids, even if it is about to expire.
 - Make the dishes clearly different from each other."""
 
 AT_RISK_BONUS = 3.0
@@ -46,8 +47,20 @@ def _goal_lines(ctx: RaidContext) -> str:
     return (
         f"Diet: {goals.diet}. Per serving: at most {goals.max_calories} calories, "
         f"at most {goals.max_sodium_mg} mg sodium, at least {goals.min_protein_g} g protein. "
-        f"Weekly shopping budget: ${goals.budget:.2f}. Favorite foods: {favorites}."
+        f"Weekly shopping budget: ${goals.budget:.2f}. Favorite foods: {favorites}. "
+        f"Foods to avoid: {', '.join(' '.join(food.split()) for food in goals.avoid) or 'none'}."
     )
+
+
+def avoided_in(dish: Dish, avoid: Sequence[str]) -> tuple[str, ...]:
+    """The avoided foods that a dish contains, matched on ingredient names."""
+    unwanted = {normalize_name(food) for food in avoid} - {""}
+    hits = []
+    for ingredient in dish.ingredients:
+        key = normalize_name(ingredient.name)
+        if any(food == key or food in key.split() for food in unwanted):
+            hits.append(ingredient.name)
+    return tuple(hits)
 
 
 def matches_favorite(recipe: Dish, favorites: Sequence[str]) -> bool:
@@ -140,7 +153,9 @@ class OfflineChef:
         eligible = [
             recipe
             for recipe in self._recipes
-            if recipe.name.lower() not in taken and (diet == "none" or diet in recipe.diets)
+            if recipe.name.lower() not in taken
+            and (diet == "none" or diet in recipe.diets)
+            and not avoided_in(recipe, ctx.goals.avoid)
         ]
         return sorted(eligible, key=lambda recipe: self._score(recipe, ctx), reverse=True)
 

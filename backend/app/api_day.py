@@ -2,24 +2,31 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel
 
 from app import tracker
+from app.chat import converse
 from app.api import WRITE_REQUESTS_PER_MINUTE, Envelope
 from app.deals import store_deals
+from app.places import PlacesError, find_stores
 from app.ratelimit import rate_limit
 from app.schemas import (
+    ChatReply,
+    ChatRequest,
     CookRequest,
     DaySummary,
     InventoryItem,
     LogRequest,
+    Nearby,
+    Origin,
     Profile,
     Progress,
     SavedPlan,
-    StoreDeals,
+    StoreBoard,
     WaterRequest,
 )
 from app.services import Services, get_services
@@ -27,6 +34,8 @@ from app.services import Services, get_services
 DAY_PATTERN = r"^\d{4}-\d{2}-\d{2}$"
 MIN_YEAR = 2000
 MAX_YEAR = 2100
+NEARBY_REQUESTS_PER_MINUTE = 6
+CHAT_REQUESTS_PER_MINUTE = 20
 
 router = APIRouter(prefix="/api")
 write_limit = Depends(rate_limit(WRITE_REQUESTS_PER_MINUTE))
@@ -115,6 +124,59 @@ def get_progress(today: str = Depends(day_in_query), services: Services = Depend
     return Envelope(data=tracker.progress(services.repository, today))
 
 
-@router.get("/stores", response_model=Envelope[list[StoreDeals]])
-def list_stores(services: Services = Depends(get_services)) -> Envelope[list[StoreDeals]]:
-    return Envelope(data=[store_deals(store, services.catalog) for store in services.stores])
+def _store_board(services: Services) -> StoreBoard:
+    nearby = tracker.load_nearby(services.repository)
+    stores = tracker.active_stores(services.repository, services.stores)
+    return StoreBoard(
+        origin=nearby.origin if nearby and nearby.stores else None,
+        stores=tuple(store_deals(store, services.catalog) for store in stores),
+    )
+
+
+@router.get("/stores", response_model=Envelope[StoreBoard])
+def list_stores(services: Services = Depends(get_services)) -> Envelope[StoreBoard]:
+    return Envelope(data=_store_board(services))
+
+
+@router.post(
+    "/nearby",
+    response_model=Envelope[StoreBoard],
+    dependencies=[Depends(rate_limit(NEARBY_REQUESTS_PER_MINUTE))],
+)
+async def set_location(origin: Origin, services: Services = Depends(get_services)) -> Envelope[StoreBoard]:
+    """Look up real grocery stores around the player and make the Shopper use them."""
+    # Keep the location coarse: about 100 m is plenty to center a map.
+    coarse = Origin(lat=round(origin.lat, 3), lon=round(origin.lon, 3))
+    places = await asyncio.to_thread(tracker.cached_places, services.repository, coarse.lat, coarse.lon)
+    if not places:
+        try:
+            places = await find_stores(origin.lat, origin.lon)
+        except PlacesError as exc:
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY, "The map service did not answer. Try again in a moment."
+            ) from exc
+        if not places:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No grocery stores were found within 2.5 miles of you.")
+        await asyncio.to_thread(tracker.cache_places, services.repository, Nearby(origin=coarse, stores=places))
+    await asyncio.to_thread(tracker.save_nearby, services.repository, Nearby(origin=coarse, stores=places))
+    return Envelope(data=await asyncio.to_thread(_store_board, services))
+
+
+@router.delete("/nearby", response_model=Envelope[StoreBoard], dependencies=[write_limit])
+def forget_location(services: Services = Depends(get_services)) -> Envelope[StoreBoard]:
+    tracker.save_nearby(services.repository, None)
+    return Envelope(data=_store_board(services))
+
+
+@router.post(
+    "/chat",
+    response_model=Envelope[ChatReply],
+    dependencies=[Depends(rate_limit(CHAT_REQUESTS_PER_MINUTE))],
+)
+async def chat(request: ChatRequest, services: Services = Depends(get_services)) -> Envelope[ChatReply]:
+    """Tell an agent what you want. It answers and updates your saved preferences."""
+    profile = await asyncio.to_thread(tracker.load_profile, services.repository)
+    reply, updated, changes = await converse(services.llm, request.agent, request.message, profile)
+    if changes:
+        await asyncio.to_thread(tracker.save_profile, services.repository, updated)
+    return Envelope(data=ChatReply(agent=request.agent, reply=reply, profile=updated, changes=tuple(changes)))

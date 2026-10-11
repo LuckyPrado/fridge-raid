@@ -41,6 +41,18 @@ def load_stores(path: Path, catalog: Catalog) -> tuple[Store, ...]:
     return tuple(stores)
 
 
+def stores_from_places(places: Sequence[StoreInfo], samples: Sequence[Store]) -> tuple[Store, ...]:
+    """Give each real store one of the sample deal sheets. The store is real, its prices are not.
+
+    The sheet is picked from the store's id, so the same store always shows the same deals.
+    """
+    if not samples:
+        return ()
+    return tuple(
+        Store(info=place, sale_prices=samples[sum(place.id.encode()) % len(samples)].sale_prices) for place in places
+    )
+
+
 def store_catalog(store: Store, catalog: Catalog) -> Catalog:
     """The grocery catalog as priced at one store."""
     return Catalog(

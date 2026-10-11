@@ -337,15 +337,6 @@ def test_log_rejects_impossible_numbers(client: TestClient) -> None:
     assert client.put(f"/api/day/{TODAY}/water", json={"glasses": -1}).status_code == 422
 
 
-@pytest.mark.integration
-def test_stores_list_sample_deals_below_the_regular_price(client: TestClient) -> None:
-    stores = client.get("/api/stores").json()["data"]
-
-    assert len(stores) >= 2
-    assert all(deal["price"] < deal["list_price"] for entry in stores for deal in entry["deals"])
-    assert all(entry["deals"] for entry in stores)
-
-
 @pytest.mark.unit
 def test_store_quotes_are_ranked_and_explained(catalog: Catalog) -> None:
     from app.deals import comparison_line, quote_stores

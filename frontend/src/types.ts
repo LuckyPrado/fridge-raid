@@ -59,6 +59,8 @@ export interface StoreInfo {
   neighborhood: string;
   distance_mi: number;
   walk_min: number;
+  lat: number | null;
+  lon: number | null;
 }
 
 export interface WeekPlan {
@@ -81,6 +83,7 @@ export interface Goals {
   min_protein_g: number;
   meals: number;
   favorites: string[];
+  avoid: string[];
   daily_calories: number;
   daily_protein_g: number;
 }
@@ -168,6 +171,30 @@ export interface Deal {
 export interface StoreDeals {
   store: StoreInfo;
   deals: Deal[];
+}
+
+export interface Origin {
+  lat: number;
+  lon: number;
+}
+
+export interface StoreBoard {
+  origin: Origin | null;
+  stores: StoreDeals[];
+}
+
+export interface ChatReply {
+  agent: AgentId;
+  reply: string;
+  profile: Profile;
+  changes: string[];
+}
+
+export interface ChatMessage {
+  id: number;
+  from: "you" | AgentId;
+  text: string;
+  changes: string[];
 }
 
 export interface CookResult {

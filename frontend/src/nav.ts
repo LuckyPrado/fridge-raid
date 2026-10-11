@@ -1,4 +1,5 @@
 import type { IconName } from "./pixel/art";
+import type { AgentId } from "./types";
 
 export type Screen =
   | { name: "home" }
@@ -9,7 +10,8 @@ export type Screen =
   | { name: "recipe"; dishId: string }
   | { name: "goals" }
   | { name: "shop" }
-  | { name: "plan" };
+  | { name: "plan" }
+  | { name: "chat"; agent?: AgentId };
 
 export type ScreenName = Screen["name"];
 export type Go = (screen: Screen) => void;
@@ -34,6 +36,7 @@ const TAB_OF_SCREEN: Record<ScreenName, TabId | null> = {
   goals: "goals",
   shop: "shop",
   plan: "shop",
+  chat: "home",
 };
 
 /** The tab to highlight for a screen, or null for full-screen flows that hide the tab bar. */

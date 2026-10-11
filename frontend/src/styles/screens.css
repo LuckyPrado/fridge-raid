@@ -1258,3 +1258,166 @@
   font-size: var(--title-lg);
   font-weight: 400;
 }
+
+/* --- Real map and store picker --- */
+
+.real-map {
+  height: 15rem;
+  /* Keep the map under sheets and the tab bar. */
+  isolation: isolate;
+  background: #a9cf7a;
+  font-family: var(--font-body);
+}
+
+.real-map .leaflet-tile {
+  image-rendering: pixelated;
+  filter: saturate(1.35) contrast(1.05);
+}
+
+.real-map .leaflet-control-attribution {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+}
+
+.map-marker {
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  overflow: visible;
+}
+
+.map-store,
+.map-you {
+  position: absolute;
+  padding: 2px var(--space-2);
+  font-family: var(--font-display);
+  font-size: var(--label);
+  line-height: 1.2;
+  white-space: nowrap;
+  transform: translate(-50%, -120%);
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--ink),
+    0 var(--px) 0 0 var(--ink),
+    calc(-1 * var(--px)) 0 0 0 var(--ink),
+    var(--px) 0 0 0 var(--ink);
+}
+
+.map-store {
+  max-width: 9rem;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  text-overflow: ellipsis;
+}
+
+.map-store.is-picked {
+  background: var(--leaf);
+  color: var(--cream);
+}
+
+.map-you {
+  background: var(--carrot);
+  color: var(--paper);
+  transform: translate(-50%, -50%);
+}
+
+.locate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 0 var(--px);
+}
+
+.store-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 3.25rem;
+  padding: var(--space-2) var(--space-2);
+  box-shadow: 0 var(--px) 0 0 var(--line);
+}
+
+.store-row.is-picked {
+  background: var(--mint);
+  box-shadow: 0 var(--px) 0 0 var(--leaf), inset calc(2 * var(--px)) 0 0 0 var(--leaf);
+}
+
+/* --- Chat --- */
+
+.agent-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  padding: 0 var(--px);
+}
+
+.agent-pick {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-1);
+  background: var(--paper);
+  font-family: var(--font-display);
+  font-size: var(--label);
+  line-height: 1.1;
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--line),
+    0 var(--px) 0 0 var(--line),
+    calc(-1 * var(--px)) 0 0 0 var(--line),
+    var(--px) 0 0 0 var(--line);
+}
+
+.agent-pick.is-picked {
+  background: var(--mint);
+  box-shadow:
+    0 calc(-1 * var(--px)) 0 0 var(--ink),
+    0 var(--px) 0 0 var(--ink),
+    calc(-1 * var(--px)) 0 0 0 var(--ink),
+    var(--px) 0 0 0 var(--ink);
+}
+
+.agent-pick-chef.is-picked {
+  background: var(--peach);
+}
+
+.agent-pick-bargain_hunter.is-picked {
+  background: var(--butter);
+}
+
+.chat-log,
+.chat-reply {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.chat-log {
+  gap: var(--space-4);
+}
+
+.chat-you {
+  --fill: var(--leaf);
+  --drop: var(--leaf-deep);
+  justify-self: end;
+  max-width: 85%;
+  padding: var(--space-2) var(--space-3);
+  color: var(--cream);
+  overflow-wrap: anywhere;
+}
+
+.chat-form {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.chat-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  border: var(--px) solid var(--ink);
+  border-radius: 0;
+  background: var(--paper);
+}

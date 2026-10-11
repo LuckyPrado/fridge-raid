@@ -12,6 +12,9 @@ import type {
   Progress,
   SavedPlan,
   StatusInfo,
+  AgentId,
+  ChatReply,
+  Origin,
   StoreDeals,
   Threat,
 } from "../types";
@@ -30,6 +33,7 @@ export const DEFAULT_PROFILE: Profile = {
     min_protein_g: 15,
     meals: 4,
     favorites: [],
+    avoid: [],
     daily_calories: 1800,
     daily_protein_g: 100,
   },
@@ -56,6 +60,8 @@ export interface Kitchen {
   status: StatusInfo | null;
   fridges: DemoFridge[];
   stores: StoreDeals[];
+  /** Where the real store search was centered, or null while the sample stores are in use. */
+  origin: Origin | null;
   inventory: InventoryItem[];
   threat: Threat;
   profile: Profile;
@@ -71,6 +77,33 @@ export interface Kitchen {
   cook: (dishId: string) => Promise<CookResult | null>;
   logFood: (entry: FoodLogInput) => Promise<boolean>;
   setWater: (glasses: number) => Promise<void>;
+  /** Ask the phone for its location and switch the Shopper to real stores nearby. Returns a problem message or null. */
+  shareLocation: () => Promise<string | null>;
+  clearLocation: () => Promise<void>;
+  chat: (agent: AgentId, message: string) => Promise<ChatReply | null>;
+}
+
+const LOCATION_TIMEOUT_MS = 12000;
+
+function currentPosition(): Promise<Origin> {
+  return new Promise((resolve, reject) => {
+    if (!window.isSecureContext || !("geolocation" in navigator)) {
+      reject(new Error("Location needs the secure https address. Open the app with https and try again."));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({ lat: position.coords.latitude, lon: position.coords.longitude }),
+      (error) =>
+        reject(
+          new Error(
+            error.code === error.PERMISSION_DENIED
+              ? "Location is turned off for this site. Allow it in your browser settings and try again."
+              : "Your phone could not find its location. Try again near a window.",
+          ),
+        ),
+      { enableHighAccuracy: false, timeout: LOCATION_TIMEOUT_MS, maximumAge: 300000 },
+    );
+  });
 }
 
 /** Server-backed state for the whole app: fridge, profile, plan, today's log, and progress. */
@@ -81,6 +114,7 @@ export function useKitchen(): Kitchen {
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [fridges, setFridges] = useState<DemoFridge[]>([]);
   const [stores, setStores] = useState<StoreDeals[]>([]);
+  const [origin, setOrigin] = useState<Origin | null>(null);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [threat, setThreat] = useState<Threat>(NO_THREAT);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
@@ -107,7 +141,8 @@ export function useKitchen(): Kitchen {
         }
         setStatus(nextStatus);
         setFridges(nextFridges);
-        setStores(nextStores);
+        setStores(nextStores.stores);
+        setOrigin(nextStores.origin);
         setInventory(items);
         setProfile(nextProfile);
         setSaved(plan);
@@ -201,6 +236,41 @@ export function useKitchen(): Kitchen {
     }
   }, [today]);
 
+  const shareLocation = useCallback(async () => {
+    try {
+      const board = await api.findNearby(await currentPosition());
+      setStores(board.stores);
+      setOrigin(board.origin);
+      return null;
+    } catch (error: unknown) {
+      return errorMessage(error);
+    }
+  }, []);
+
+  const clearLocation = useCallback(async () => {
+    try {
+      const board = await api.forgetNearby();
+      setStores(board.stores);
+      setOrigin(board.origin);
+    } catch (error: unknown) {
+      setProblem(errorMessage(error));
+    }
+  }, []);
+
+  const chat = useCallback(async (agent: AgentId, message: string) => {
+    try {
+      const reply = await api.chat(agent, message);
+      setProfile(reply.profile);
+      if (reply.changes.length > 0) {
+        await refresh(() => api.day(today), setDay);
+      }
+      return reply;
+    } catch (error: unknown) {
+      setProblem(errorMessage(error));
+      return null;
+    }
+  }, [today]);
+
   return {
     isLoading,
     hasLoaded,
@@ -208,6 +278,7 @@ export function useKitchen(): Kitchen {
     status,
     fridges,
     stores,
+    origin,
     inventory,
     threat,
     profile,
@@ -223,5 +294,8 @@ export function useKitchen(): Kitchen {
     cook,
     logFood,
     setWater,
+    shareLocation,
+    clearLocation,
+    chat,
   };
 }

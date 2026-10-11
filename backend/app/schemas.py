@@ -18,6 +18,9 @@ MAX_INVENTORY_ITEMS = 200
 MAX_STEPS = 8
 MAX_STEP_CHARS = 240
 MAX_FAVORITES = 8
+MAX_AVOID = 12
+MAX_NEARBY_STORES = 8
+MAX_CHAT_CHARS = 400
 MAX_WATER_GLASSES = 20
 
 Day = Annotated[str, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
@@ -73,6 +76,8 @@ class Goals(Frozen):
     min_protein_g: int = Field(default=15, ge=0, le=200)
     meals: int = Field(default=4, ge=1, le=7)
     favorites: tuple[Favorite, ...] = Field(default=(), max_length=MAX_FAVORITES)
+    # Foods the player dislikes or cannot eat. No recipe may use them.
+    avoid: tuple[Favorite, ...] = Field(default=(), max_length=MAX_AVOID)
     daily_calories: int = Field(default=1800, ge=800, le=6000)
     daily_protein_g: int = Field(default=100, ge=10, le=400)
 
@@ -101,7 +106,9 @@ class StoreInfo(Frozen):
     name: str = Field(min_length=1, max_length=60)
     neighborhood: str = Field(default="", max_length=60)
     distance_mi: float = Field(ge=0, le=100)
-    walk_min: int = Field(ge=0, le=600)
+    walk_min: int = Field(ge=0, le=6000)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lon: float | None = Field(default=None, ge=-180, le=180)
 
 
 class WeekPlan(Frozen):
@@ -181,6 +188,37 @@ class StoreDeals(Frozen):
     deals: tuple[Deal, ...]
 
 
+class Origin(Frozen):
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+
+
+class Nearby(Frozen):
+    """Real stores found around the player's location."""
+
+    origin: Origin
+    stores: tuple[StoreInfo, ...] = Field(max_length=MAX_NEARBY_STORES)
+
+
+class StoreBoard(Frozen):
+    """The stores the Shopper works with: real nearby ones when a location is set, otherwise the samples."""
+
+    origin: Origin | None
+    stores: tuple[StoreDeals, ...]
+
+
+class ChatRequest(BaseModel):
+    agent: Literal["chef", "nutritionist", "bargain_hunter"]
+    message: str = Field(min_length=1, max_length=MAX_CHAT_CHARS)
+
+
+class ChatReply(Frozen):
+    agent: str
+    reply: str
+    profile: Profile
+    changes: tuple[str, ...]
+
+
 class CookRequest(BaseModel):
     dish_id: str = Field(min_length=1, max_length=16)
     day: Day
@@ -240,6 +278,22 @@ class DishDraft(BaseModel):
 
 class ChefDraft(BaseModel):
     dishes: list[DishDraft]
+
+
+class ChatDraft(BaseModel):
+    reply: str
+    name: str
+    diet: str
+    budget: float
+    meals: int
+    daily_calories: int
+    daily_protein_g: int
+    max_calories: int
+    max_sodium_mg: int
+    add_favorites: list[str]
+    remove_favorites: list[str]
+    add_avoid: list[str]
+    remove_avoid: list[str]
 
 
 class VerdictDraft(BaseModel):

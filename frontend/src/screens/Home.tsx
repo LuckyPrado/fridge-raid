@@ -104,6 +104,10 @@ export function Home({ kitchen, go }: HomeProps) {
         Scan my fridge
       </Button>
 
+      <Button tone="paper" icon="chat" isBlock onClick={() => go({ name: "chat" })}>
+        Talk to your party
+      </Button>
+
       <SectionTitle title="Meet your party" aside="All set to help" />
       <button type="button" className="bubble-link" onClick={() => go({ name: "chef" })}>
         <AgentBubble agent="chef">{chefLine(kitchen)}</AgentBubble>

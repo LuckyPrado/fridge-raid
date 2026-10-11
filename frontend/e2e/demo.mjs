@@ -18,6 +18,8 @@ const check = (condition, message) => {
 
 const browser = await chromium.launch({ channel: "chrome" });
 const context = await browser.newContext({
+  geolocation: { latitude: 40.5008, longitude: -74.4474 },
+  permissions: ["geolocation"],
   viewport: { width: 390, height: 844 },
   deviceScaleFactor: 2,
   isMobile: true,
@@ -39,6 +41,8 @@ await page.request.put(new URL("/api/inventory", APP_URL).href, { data: { items:
 const now = new Date();
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 await page.request.put(new URL(`/api/day/${today}/water`, APP_URL).href, { data: { glasses: 0 } });
+await page.request.put(new URL("/api/profile", APP_URL).href, { data: { name: "", goals: {} } });
+await page.request.delete(new URL("/api/nearby", APP_URL).href);
 
 await page.goto(APP_URL);
 await page.getByRole("heading", { name: "Fridge Raid" }).waitFor();
@@ -121,6 +125,35 @@ await page.getByRole("checkbox").first().click();
 check(await page.getByRole("checkbox", { checked: true }).count() === 1, "plan: checking an item did not stick");
 await shot("11-plan");
 await noSidewaysScroll("plan");
+
+// Real stores around the shared location, on a real map. This step needs the internet.
+await tab("Shop").click();
+await page.getByRole("button", { name: "Use my location" }).click();
+await page.getByRole("heading", { name: "Stores near you" }).waitFor({ timeout: 40000 });
+await page.locator(".real-map .leaflet-tile-loaded").first().waitFor({ timeout: 20000 });
+check(await page.locator(".map-store").count() >= 1, "shop: no store pins on the real map");
+await page.getByRole("button", { name: "Plan again with these stores" }).waitFor();
+await shot("13-shop-real");
+await noSidewaysScroll("shop with real stores");
+await page.getByRole("button", { name: "Use sample stores" }).click();
+await page.getByRole("button", { name: "Use my location" }).waitFor();
+
+// Talk to the Chef and the Shopper. The changes land in the saved profile.
+await page.getByRole("button", { name: "Talk to the Shopper" }).click();
+await page.getByRole("heading", { name: "Tell us what you like" }).waitFor();
+await page.getByRole("button", { name: "Make my budget $40" }).click();
+await page.locator(".chip", { hasText: "Weekly budget $40.00" }).waitFor();
+await page.getByRole("group", { name: "Who to talk to" }).getByRole("button", { name: "Chef" }).click();
+await page.getByLabel("Message to the Chef").fill("I hate mushrooms");
+await page.getByRole("button", { name: "Send" }).click();
+await page.locator(".chip", { hasText: "Avoiding: mushrooms" }).waitFor();
+await shot("14-chat");
+await noSidewaysScroll("chat");
+await tab("Goals").click();
+await page.getByText("No mushrooms").waitFor();
+await tab("Shop").click();
+await page.getByRole("button", { name: /View my \$[\d.]+ shopping plan/ }).click();
+await page.getByRole("heading", { name: "Your shopping loot" }).waitFor();
 
 // Everything survives a reload.
 await page.reload();

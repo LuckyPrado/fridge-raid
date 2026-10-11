@@ -145,8 +145,9 @@ def _remember_plan(event: dict, services: Services) -> None:
 
 async def _sse(request: RaidRequest, services: Services) -> AsyncIterator[str]:
     party = services.party_for(request.offline)
+    stores = await asyncio.to_thread(tracker.active_stores, services.repository, services.stores)
     try:
-        async for event in run_raid(request, party, services.offline_party, services.catalog, services.stores):
+        async for event in run_raid(request, party, services.offline_party, services.catalog, stores):
             if event["type"] == "plan":
                 await asyncio.to_thread(_remember_plan, event, services)
             yield f"data: {json.dumps(event)}\n\n"

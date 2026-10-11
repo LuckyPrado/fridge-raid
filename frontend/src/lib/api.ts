@@ -8,7 +8,10 @@ import type {
   Progress,
   SavedPlan,
   StatusInfo,
-  StoreDeals,
+  AgentId,
+  ChatReply,
+  Origin,
+  StoreBoard,
   Threat,
 } from "../types";
 
@@ -63,7 +66,10 @@ export const api = {
   setWater: (day: string, glasses: number): Promise<DaySummary> =>
     request(`/api/day/${day}/water`, json("PUT", { glasses })),
   progress: (today: string): Promise<Progress> => request(`/api/progress?today=${today}`),
-  stores: (): Promise<StoreDeals[]> => request("/api/stores"),
+  stores: (): Promise<StoreBoard> => request("/api/stores"),
+  findNearby: (origin: Origin): Promise<StoreBoard> => request("/api/nearby", json("POST", origin)),
+  forgetNearby: (): Promise<StoreBoard> => request("/api/nearby", { method: "DELETE" }),
+  chat: (agent: AgentId, message: string): Promise<ChatReply> => request("/api/chat", json("POST", { agent, message })),
   inventory: async (): Promise<InventoryItem[]> =>
     (await request<{ items: InventoryItem[] }>("/api/inventory")).items,
   saveInventory: async (items: InventoryItem[]): Promise<InventoryItem[]> =>

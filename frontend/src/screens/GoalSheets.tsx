@@ -6,15 +6,16 @@ import { Button, Field, Sheet } from "../ui/kit";
 
 const DIETS: readonly Diet[] = ["none", "vegetarian", "vegan", "pescatarian"];
 const MAX_FAVORITES = 8;
+const MAX_AVOID = 12;
 const MAX_FAVORITE_CHARS = 30;
 
 /** "pasta, Tacos ,  eggs" becomes ["pasta", "tacos", "eggs"], trimmed to what the server accepts. */
-export function parseFavorites(text: string): string[] {
+export function parseFavorites(text: string, limit: number = MAX_FAVORITES): string[] {
   const cleaned = text
     .split(",")
     .map((entry) => entry.trim().toLowerCase().slice(0, MAX_FAVORITE_CHARS))
     .filter(Boolean);
-  return [...new Set(cleaned)].slice(0, MAX_FAVORITES);
+  return [...new Set(cleaned)].slice(0, limit);
 }
 
 function clamp(value: number, low: number, high: number): number {
@@ -31,6 +32,7 @@ export function GoalsSheet({ profile, onSave, onClose }: GoalsSheetProps) {
   const [name, setName] = useState(profile.name);
   const [goals, setGoals] = useState(profile.goals);
   const [favorites, setFavorites] = useState(profile.goals.favorites.join(", "));
+  const [avoid, setAvoid] = useState(profile.goals.avoid.join(", "));
   const [isSaving, setIsSaving] = useState(false);
 
   const setNumber = (key: keyof Profile["goals"]) => (event: { target: { value: string } }) =>
@@ -50,6 +52,7 @@ export function GoalsSheet({ profile, onSave, onClose }: GoalsSheetProps) {
         max_calories: Math.round(clamp(goals.max_calories, 200, 3000)),
         max_sodium_mg: Math.round(clamp(goals.max_sodium_mg, 100, 5000)),
         favorites: parseFavorites(favorites),
+        avoid: parseFavorites(avoid, MAX_AVOID),
       },
     };
     const isSaved = await onSave(next);
@@ -67,6 +70,9 @@ export function GoalsSheet({ profile, onSave, onClose }: GoalsSheetProps) {
         </Field>
         <Field label="Favorite foods" hint="Separate with commas. The Chef leans toward these.">
           <input value={favorites} placeholder="pasta, tacos, eggs" onChange={(event) => setFavorites(event.target.value)} />
+        </Field>
+        <Field label="Foods to avoid" hint="Dislikes and allergies. No recipe will use these.">
+          <input value={avoid} placeholder="mushrooms, shrimp" onChange={(event) => setAvoid(event.target.value)} />
         </Field>
         <div className="form-row">
           <Field label="Diet">

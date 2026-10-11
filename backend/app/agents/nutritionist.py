@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from app.agents.chef import avoided_in
 from app.llm import LLM
 from app.schemas import Dish, Goals, ReviewDraft, Verdict
 
@@ -12,8 +13,8 @@ You are precise, a little stern, and you do not let the Chef get away with anyth
 
 For each dish, return a verdict:
 - "score" from 0 to 100 for how well it fits the player's goals.
-- "veto" true only for a clear violation: it breaks the diet, or it exceeds the calorie or sodium
-  limit by more than 25 percent. A near miss gets a warning in the reason, not a veto.
+- "veto" true only for a clear violation: it breaks the diet, it contains a food the player avoids,
+  or it exceeds the calorie or sodium limit by more than 25 percent. A near miss gets a warning, not a veto.
 - "reason" is one in-character line of at most 18 words that cites a number.
 Return exactly one verdict per dish, using the dish_id you were given."""
 
@@ -43,7 +44,8 @@ class GeminiNutritionist:
     async def review(self, dishes: Sequence[Dish], goals: Goals) -> tuple[Verdict, ...]:
         prompt = (
             f"Player goals: diet {goals.diet}; per serving at most {goals.max_calories} calories, "
-            f"at most {goals.max_sodium_mg} mg sodium, at least {goals.min_protein_g} g protein.\n\n"
+            f"at most {goals.max_sodium_mg} mg sodium, at least {goals.min_protein_g} g protein. "
+            f"Foods the player avoids: {', '.join(goals.avoid) or 'none'}.\n\n"
             f"Dishes to review:\n{_dish_lines(dishes)}"
         )
         draft = await self._llm.generate(
@@ -65,6 +67,11 @@ def _judge(dish: Dish, goals: Goals) -> Verdict:
         score -= DIET_PENALTY
         veto = True
         problems.append(f"not {goals.diet}")
+    unwanted = avoided_in(dish, goals.avoid)
+    if unwanted:
+        score -= DIET_PENALTY
+        veto = True
+        problems.append(f"contains {', '.join(unwanted)}, which you avoid")
     if dish.sodium_mg > goals.max_sodium_mg:
         score -= OVER_LIMIT_PENALTY
         veto = veto or dish.sodium_mg > goals.max_sodium_mg * VETO_MARGIN

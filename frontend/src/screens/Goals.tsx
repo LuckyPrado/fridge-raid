@@ -48,7 +48,7 @@ export function Goals({ kitchen, go }: GoalsProps) {
       <ScreenHeader
         eyebrow="Your nutritionist · daily stats"
         title="Small steps, strong you"
-        action={<IconButton icon="sliders" label="Edit goals" onClick={() => setOpenSheet("goals")} />}
+        action={<IconButton icon="chat" label="Talk to the Nutritionist" onClick={() => go({ name: "chat", agent: "nutritionist" })} />}
       />
       <AgentBubble agent="nutritionist">{day.coach || "Log a meal and I will keep count."}</AgentBubble>
       <p className="date-title">{dateTitle(today)}</p>
@@ -132,6 +132,9 @@ export function Goals({ kitchen, go }: GoalsProps) {
         {goals.diet !== "none" && <Chip>{capitalize(goals.diet)}</Chip>}
         {goals.favorites.map((favorite) => (
           <Chip key={favorite} tone="peach">{capitalize(favorite)}</Chip>
+        ))}
+        {goals.avoid.map((food) => (
+          <Chip key={food} tone="paper">{`No ${food}`}</Chip>
         ))}
         <button type="button" className="chip chip-paper chip-button" onClick={() => setOpenSheet("goals")}>
           <Icon name="pencil" scale={1} />

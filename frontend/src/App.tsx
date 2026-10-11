@@ -3,8 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useKitchen } from "./hooks/useKitchen";
 import { useRaid } from "./hooks/useRaid";
 import { TABS, tabOf, type Screen, type TabId } from "./nav";
+import type { ChatMessage } from "./types";
 import { AGENT_SPRITES, SPRITE_OUTLINE } from "./pixel/art";
 import { PixelSprite } from "./pixel/PixelSprite";
+import { Chat } from "./screens/Chat";
 import { Chef } from "./screens/Chef";
 import { Fridge } from "./screens/Fridge";
 import { Goals } from "./screens/Goals";
@@ -18,7 +20,7 @@ import { Button, Icon, IconButton } from "./ui/kit";
 
 const TOAST_MS = 2600;
 const SCREEN_KEY = "fridge-raid:screen";
-const SCREEN_NAMES: readonly string[] = ["home", "scan", "fridge", "huddle", "chef", "recipe", "goals", "shop", "plan"];
+const SCREEN_NAMES: readonly string[] = ["home", "scan", "fridge", "huddle", "chef", "recipe", "goals", "shop", "plan", "chat"];
 
 /** Phones reload a page that was left in the background. Remember the screen so the player lands where they were. */
 function restoreScreen(): Screen {
@@ -52,6 +54,7 @@ export function App() {
   const raid = useRaid();
   const [screen, setScreen] = useState<Screen>(restoreScreen);
   const [toast, setToast] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const toastTimer = useRef<number | null>(null);
   const { reloadPlan } = kitchen;
   const raidPhase = raid.raid.phase;
@@ -151,7 +154,10 @@ export function App() {
         {screen.name === "chef" && <Chef kitchen={kitchen} go={go} onPlan={startPlanning} />}
         {screen.name === "recipe" && <Recipe kitchen={kitchen} dishId={screen.dishId} go={go} notify={notify} />}
         {screen.name === "goals" && <Goals kitchen={kitchen} go={go} />}
-        {screen.name === "shop" && <Shop kitchen={kitchen} go={go} />}
+        {screen.name === "shop" && <Shop kitchen={kitchen} go={go} onPlan={startPlanning} />}
+        {screen.name === "chat" && (
+          <Chat kitchen={kitchen} go={go} agent={screen.agent} messages={messages} onMessages={setMessages} onPlan={startPlanning} />
+        )}
         {screen.name === "plan" && <Plan kitchen={kitchen} go={go} />}
       </main>
 
