@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app.catalog import Catalog, CatalogItem
 from app.config import Settings
 from app.main import create_app
+from app.ratelimit import reset_route_limiters
 from app.repository import sqlite_repository
 from app.schemas import Dish, Ingredient, InventoryItem
 
@@ -25,6 +26,11 @@ def make_dish(name: str, ingredients: dict[str, float], **nutrition: int) -> Dis
         protein_g=nutrition.get("protein_g", 25),
         sodium_mg=nutrition.get("sodium_mg", 500),
     )
+
+
+@pytest.fixture(autouse=True)
+def fresh_rate_limits() -> None:
+    reset_route_limiters()
 
 
 @pytest.fixture

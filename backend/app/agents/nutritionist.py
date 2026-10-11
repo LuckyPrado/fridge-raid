@@ -60,7 +60,8 @@ def _judge(dish: Dish, goals: Goals) -> Verdict:
     veto = False
     problems: list[str] = []
 
-    if goals.diet != "none" and goals.diet not in dish.diets:
+    # Dishes from the live Chef carry no diet tags, so the diet can only be judged when tags exist.
+    if goals.diet != "none" and dish.diets and goals.diet not in dish.diets:
         score -= DIET_PENALTY
         veto = True
         problems.append(f"not {goals.diet}")

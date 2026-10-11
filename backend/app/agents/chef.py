@@ -6,8 +6,15 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from app.agents.base import SERVINGS, RaidContext, Rejection, dish_from_draft, inventory_lines
-from app.catalog import normalize_name
+from app.agents.base import (
+    SERVINGS,
+    RaidContext,
+    Rejection,
+    dish_from_draft,
+    inventory_lines,
+    reconcile_units,
+)
+from app.catalog import Catalog, normalize_name
 from app.llm import LLM, LLMError
 from app.optimizer import RISK_DAYS
 from app.schemas import ChefDraft, Dish
@@ -49,8 +56,8 @@ def _base_prompt(ctx: RaidContext) -> str:
     )
 
 
-def _to_dishes(draft: ChefDraft, limit: int) -> tuple[Dish, ...]:
-    dishes = tuple(dish for dish in map(dish_from_draft, draft.dishes) if dish is not None)
+def _to_dishes(draft: ChefDraft, limit: int, catalog: Catalog) -> tuple[Dish, ...]:
+    dishes = tuple(reconcile_units(dish, catalog) for dish in map(dish_from_draft, draft.dishes) if dish is not None)
     if not dishes:
         raise LLMError("Chef returned no usable dishes.")
     return dishes[:limit]
@@ -63,7 +70,7 @@ class GeminiChef:
     async def propose(self, ctx: RaidContext, count: int) -> tuple[Dish, ...]:
         prompt = f"{_base_prompt(ctx)}\n\nPropose exactly {count} dishes."
         draft = await self._llm.generate(system=CHEF_SYSTEM, prompt=prompt, schema=ChefDraft)
-        return _to_dishes(draft, count)
+        return _to_dishes(draft, count, ctx.catalog)
 
     async def revise(
         self, ctx: RaidContext, rejections: Sequence[Rejection], taken_names: Sequence[str]
@@ -77,7 +84,7 @@ class GeminiChef:
             "while still using the expiring food. Each pitch should react to the veto."
         )
         draft = await self._llm.generate(system=CHEF_SYSTEM, prompt=prompt, schema=ChefDraft)
-        return _to_dishes(draft, len(rejections))
+        return _to_dishes(draft, len(rejections), ctx.catalog)
 
 
 def load_recipes(path: Path) -> tuple[Dish, ...]:

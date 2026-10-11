@@ -65,23 +65,32 @@ class Goals(Frozen):
     meals: int = Field(default=4, ge=1, le=7)
 
 
+MAX_PLAN_DISHES = 20
+MAX_CART_LINES = 200
+MAX_MONEY = 100_000
+
+
+def _money() -> float:
+    return Field(ge=0, le=MAX_MONEY, allow_inf_nan=False)
+
+
 class CartLine(Frozen):
-    name: str
-    packs: int
-    pack_size: float
-    unit: str
-    cost: float
+    name: str = Field(min_length=1, max_length=60)
+    packs: int = Field(ge=1, le=1000)
+    pack_size: float = Field(gt=0, le=1000, allow_inf_nan=False)
+    unit: str = Field(max_length=20)
+    cost: float = _money()
 
 
 class WeekPlan(Frozen):
-    dishes: tuple[Dish, ...]
-    cart: tuple[CartLine, ...]
-    total_cost: float
-    budget: float
-    rescued: tuple[str, ...]
-    waste_value_total: float
-    waste_value_saved: float
-    benched: tuple[str, ...] = ()
+    dishes: tuple[Dish, ...] = Field(max_length=MAX_PLAN_DISHES)
+    cart: tuple[CartLine, ...] = Field(max_length=MAX_CART_LINES)
+    total_cost: float = _money()
+    budget: float = _money()
+    rescued: tuple[str, ...] = Field(max_length=MAX_INVENTORY_ITEMS)
+    waste_value_total: float = _money()
+    waste_value_saved: float = _money()
+    benched: tuple[str, ...] = Field(default=(), max_length=MAX_INVENTORY_ITEMS)
 
 
 class RaidRequest(BaseModel):

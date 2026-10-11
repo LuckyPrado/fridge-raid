@@ -20,8 +20,14 @@ function toRow(item: InventoryItem): Row {
   return { ...item, quantity: String(item.quantity), days_left: String(item.days_left) };
 }
 
+/** crypto.randomUUID is missing on non-secure origins, such as a LAN address over http. */
+function newRowId(): string {
+  const random = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+  return random.replace(/[^a-z0-9]/gi, "").slice(0, 12);
+}
+
 function blankRow(): Row {
-  return { id: crypto.randomUUID().slice(0, 12), name: "", category: "produce", quantity: "1", unit: "unit", days_left: "5" };
+  return { id: newRowId(), name: "", category: "produce", quantity: "1", unit: "unit", days_left: "5" };
 }
 
 /** Convert edited rows to inventory. Returns the first problem found instead of items. */

@@ -82,7 +82,7 @@ The offline agents make this run identically with no network.
 ## Tests
 
 ```bash
-cd backend && pytest --cov=app          # 70 tests
+cd backend && pytest --cov=app          # 77 tests
 cd frontend && npm test                 # reducer, stream parser, formatting
 cd frontend && node e2e/demo.mjs        # browser walkthrough; needs both servers running and Chrome
 ```

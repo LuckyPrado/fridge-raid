@@ -11,6 +11,7 @@ from app.catalog import Catalog
 from app.schemas import Dish, DishDraft, Goals, Ingredient, InventoryItem, Verdict, WeekPlan
 
 SERVINGS = 2
+MAX_PACKS_PER_INGREDIENT = 3
 
 
 @dataclass(frozen=True)
@@ -53,12 +54,30 @@ class Party:
 
 def inventory_lines(items: Sequence[InventoryItem]) -> str:
     return "\n".join(
-        f"- {item.name}: {item.quantity:g} {item.unit}, {item.days_left} day(s) left" for item in items
+        f"- {' '.join(item.name.split())}: {item.quantity:g} {item.unit}, {item.days_left} day(s) left"
+        for item in items
     )
 
 
 def _clamp(value: int, low: int, high: int) -> int:
     return max(low, min(high, value))
+
+
+def reconcile_units(dish: Dish, catalog: Catalog) -> Dish:
+    """Force known ingredients onto the catalog's unit so cart math stays sane.
+
+    The model is asked for catalog units but may answer "200 g" for an item sold by the piece.
+    A mismatched amount is treated as a rough count and capped at a few packs.
+    """
+    fixed = []
+    for ingredient in dish.ingredients:
+        entry = catalog.lookup(ingredient.name)
+        if entry is None or ingredient.unit.strip().lower() == entry.unit:
+            fixed.append(ingredient)
+            continue
+        cap = MAX_PACKS_PER_INGREDIENT * entry.pack_size
+        fixed.append(ingredient.model_copy(update={"unit": entry.unit, "quantity": min(ingredient.quantity, cap)}))
+    return dish.model_copy(update={"ingredients": tuple(fixed)})
 
 
 def dish_from_draft(draft: DishDraft) -> Dish | None:

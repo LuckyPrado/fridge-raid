@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+import threading
 from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -59,6 +60,8 @@ class SqlRepository:
         self._connect = connect
         self._ph = placeholder
         self._ts_type = ts_type
+        # Serializes replace_items: overlapping delete-then-insert writes collide on Postgres.
+        self._write_lock = threading.Lock()
 
     def init_schema(self, hypertable: bool = False) -> None:
         with closing(self._connect()) as conn:
@@ -105,7 +108,7 @@ class SqlRepository:
             (i.id, i.name, i.category, i.quantity, i.unit, (today + timedelta(days=i.days_left)).isoformat())
             for i in items
         ]
-        with closing(self._connect()) as conn:
+        with self._write_lock, closing(self._connect()) as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM inventory")
             if rows:

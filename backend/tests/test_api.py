@@ -82,6 +82,23 @@ def test_create_repository_falls_back_to_sqlite_when_postgres_is_unreachable(tmp
     assert repo.name == "sqlite"
 
 
+def test_scout_route_returns_429_once_the_limit_is_hit(client: TestClient) -> None:
+    statuses = [
+        client.post("/api/scout", files={"photo": ("f.png", b"x", "image/png")}).status_code for _ in range(8)
+    ]
+
+    assert statuses[0] == 503 and statuses[-1] == 429
+
+
+def test_rate_limiter_forgets_idle_clients() -> None:
+    limiter = RateLimiter(max_requests=2, window_seconds=60)
+    limiter.allow("old", now=0)
+
+    limiter.allow("new", now=100)
+
+    assert set(limiter._hits) == {"new"}
+
+
 def test_rate_limiter_blocks_after_the_limit_and_recovers() -> None:
     limiter = RateLimiter(max_requests=2, window_seconds=60)
 
@@ -232,6 +249,29 @@ def test_scout_rejects_bad_uploads(settings: Settings, name: str, size: int, mim
 
     assert response.status_code == expected_status
     assert response.json()["success"] is False
+
+
+def test_scout_refuses_an_oversized_upload_from_its_declared_length(settings: Settings) -> None:
+    client = _client_with_llm(settings, _ScoutLLM())
+
+    response = client.post(
+        "/api/scout",
+        files={"photo": ("fridge.png", b"tiny", "image/png")},
+        headers={"content-length": str(MAX_UPLOAD_BYTES * 3)},
+    )
+
+    assert response.status_code == 413
+
+
+def test_accept_rejects_a_plan_with_impossible_numbers(client: TestClient) -> None:
+    plan = {
+        "dishes": [], "cart": [], "total_cost": -5, "budget": 25, "rescued": [],
+        "waste_value_total": 0, "waste_value_saved": 0,
+    }
+
+    response = client.post("/api/plan/accept", json={"inventory": [], "plan": plan})
+
+    assert response.status_code == 422
 
 
 def test_scout_reports_a_gateway_error_when_the_model_fails(settings: Settings) -> None:

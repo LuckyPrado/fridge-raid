@@ -6,7 +6,7 @@ import json
 import logging
 from typing import AsyncIterator, Generic, TypeVar
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -26,8 +26,9 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 ALLOWED_IMAGE_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
-SCOUT_REQUESTS_PER_MINUTE = 10
-RAID_REQUESTS_PER_MINUTE = 20
+MULTIPART_OVERHEAD_BYTES = 64 * 1024
+SCOUT_REQUESTS_PER_MINUTE = 6
+RAID_REQUESTS_PER_MINUTE = 10
 WRITE_REQUESTS_PER_MINUTE = 60
 
 
@@ -102,10 +103,17 @@ def put_inventory(
     return Envelope(data=payload)
 
 
+def reject_oversized_body(request: Request) -> None:
+    """Refuse a too-large upload from its declared size, before the body is read."""
+    declared = request.headers.get("content-length", "")
+    if declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES + MULTIPART_OVERHEAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Photo is too large. The limit is 8 MB.")
+
+
 @router.post(
     "/scout",
     response_model=Envelope[InventoryPayload],
-    dependencies=[Depends(rate_limit(SCOUT_REQUESTS_PER_MINUTE))],
+    dependencies=[Depends(rate_limit(SCOUT_REQUESTS_PER_MINUTE)), Depends(reject_oversized_body)],
 )
 async def scout(
     photo: UploadFile = File(...), services: Services = Depends(get_services)

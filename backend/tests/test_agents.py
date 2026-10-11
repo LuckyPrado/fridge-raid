@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from app.agents.base import Party, RaidContext, Rejection, dish_from_draft
+from app.agents.base import Party, RaidContext, Rejection, dish_from_draft, reconcile_units
 from app.agents.bargain_hunter import GeminiBargainHunter, OfflineBargainHunter
 from app.agents.chef import GeminiChef, OfflineChef
 from app.agents.nutritionist import GeminiNutritionist, OfflineNutritionist
@@ -213,12 +213,51 @@ async def test_offline_nutritionist_vetoes_clear_violations_only() -> None:
     assert verdicts[3].score < verdicts[2].score
 
 
+async def test_offline_nutritionist_does_not_veto_untagged_dishes_on_diet() -> None:
+    """Live Chef dishes have no diet tags; a backup review must not reject them all."""
+    untagged = make_dish("Lentil Soup", {"lentil": 1}).model_copy(update={"id": "d1"})
+
+    (verdict,) = await OfflineNutritionist().review([untagged], Goals(diet="vegan"))
+
+    assert not verdict.veto
+
+
+def test_reconcile_units_fixes_mismatched_units_and_caps_the_amount(catalog: Catalog) -> None:
+    dish = Dish(
+        name="Odd Units",
+        ingredients=(
+            {"name": "spinach", "quantity": 200, "unit": "g"},
+            {"name": "egg", "quantity": 3, "unit": "unit"},
+            {"name": "dragonfruit", "quantity": 2, "unit": "slice"},
+        ),
+        calories=300, protein_g=10, sodium_mg=100,
+    )
+
+    fixed = reconcile_units(dish, catalog)
+
+    assert [(i.name, i.quantity, i.unit) for i in fixed.ingredients] == [
+        ("spinach", 12, "unit"),  # capped at 3 packs of 4
+        ("egg", 3, "unit"),
+        ("dragonfruit", 2, "slice"),
+    ]
+
+
+async def test_gemini_chef_reconciles_units_before_returning(catalog: Catalog) -> None:
+    odd = _draft("Odd", ingredients=[IngredientDraft(name="spinach", quantity=500, unit="g")])
+    llm = StubLLM({ChefDraft: ChefDraft(dishes=[odd])})
+
+    (dish,) = await GeminiChef(llm).propose(_ctx(catalog), count=1)
+
+    assert dish.ingredients[0].unit == "unit" and dish.ingredients[0].quantity == 12
+
+
 async def test_offline_nutritionist_vetoes_diet_violations() -> None:
-    dish = make_dish("Steak", {"beef": 1}).model_copy(update={"id": "d1"})
+    dish = make_dish("Steak", {"beef": 1}).model_copy(update={"id": "d1", "diets": ("pescatarian",)})
 
     (verdict,) = await OfflineNutritionist().review([dish], Goals(diet="vegan"))
 
     assert verdict.veto and "not vegan" in verdict.reason.lower()
+
 
 
 @pytest.mark.parametrize(
