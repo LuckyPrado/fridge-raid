@@ -70,6 +70,8 @@ Open http://localhost:5173.
 
 The dev server listens on your local network. With the phone on the same Wi-Fi, open the `Network` address that `npm run dev` prints, for example `http://192.168.1.20:5173`. The shutter opens the phone camera. Use the browser's "Add to Home Screen" to install it.
 
+For HTTPS, run `npm run dev:https` instead and open `https://<laptop-ip>:5443`. The certificate is self-signed, so the phone shows a warning once. Choose to continue.
+
 Some venue networks block device-to-device traffic. In that case connect the laptop to the phone's hotspot, or use the deployed site.
 
 ### Configuration
