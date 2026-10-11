@@ -2,7 +2,7 @@
 
 Buying one pack can unlock several dishes, so dishes cannot be costed one at a time.
 The candidate list is small, so every subset is checked exactly.
-Ranking is lexicographic: most meals, then most at-risk food rescued, then lowest cost.
+Ranking is lexicographic: most at-risk food rescued, then most meals, then lowest cost.
 """
 
 from __future__ import annotations
@@ -133,13 +133,13 @@ def optimize_plan(
     pool = _shortlist(candidates, risky)
 
     best: tuple[Dish, ...] = ()
-    best_key: tuple[int, float, float] = (0, 0.0, 0.0)
+    best_key: tuple[float, int, float] = (-1.0, 0, 0.0)
     for size in range(1, min(max_meals, len(pool)) + 1):
         for subset in combinations(pool, size):
             cost = cart_total(build_cart(subset, stock, catalog))
             if cost > budget + _EPSILON:
                 continue
-            key = (size, rescued(subset, risky)[0], -cost)
+            key = (rescued(subset, risky)[0], size, -cost)
             if key > best_key:
                 best, best_key = subset, key
 

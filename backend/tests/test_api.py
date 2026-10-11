@@ -107,6 +107,15 @@ def test_demo_fridges_are_listed_with_items(client: TestClient) -> None:
     assert all(fridge["items"] for fridge in fridges)
 
 
+def test_threat_reports_value_and_names_of_expiring_food(client: TestClient) -> None:
+    items = _demo_items(client, "dorm")
+
+    threat = client.post("/api/threat", json={"items": items}).json()["data"]
+
+    assert threat["waste_value_total"] > 0
+    assert "spinach" in threat["at_risk"] and "rice" not in threat["at_risk"]
+
+
 def test_inventory_can_be_saved_and_read_back(client: TestClient) -> None:
     items = _demo_items(client)
 

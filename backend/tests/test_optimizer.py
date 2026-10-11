@@ -104,6 +104,18 @@ def test_optimizer_picks_most_meals_within_budget(catalog: Catalog) -> None:
     assert plan.benched == ("Salmon Plate",)
 
 
+def test_optimizer_prefers_rescuing_food_over_planning_more_meals(catalog: Catalog) -> None:
+    inventory = [make_item("spinach", 4, 1)]
+    rescuer = make_dish("Spinach Salmon", {"spinach": 4, "salmon": 1})
+    filler_one = make_dish("Rice", {"rice": 1})
+    filler_two = make_dish("Cheese Plate", {"cheese": 1})
+
+    plan = optimize_plan([filler_one, filler_two, rescuer], inventory, catalog, budget=9.0, max_meals=2)
+
+    assert [dish.name for dish in plan.dishes] == ["Spinach Salmon"]
+    assert plan.waste_value_saved == 2.00
+
+
 def test_optimizer_breaks_meal_ties_by_food_rescued(catalog: Catalog) -> None:
     inventory = [make_item("spinach", 4, 1), make_item("egg", 12, 10)]
     rescuer = make_dish("Spinach Omelette", {"spinach": 4, "egg": 2})

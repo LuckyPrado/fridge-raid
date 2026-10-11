@@ -14,6 +14,7 @@ from app.config import MAX_UPLOAD_BYTES
 from app.inventory_ops import apply_plan
 from app.llm import LLMError
 from app.negotiation import run_raid
+from app.optimizer import at_risk_items, waste_value_total
 from app.ratelimit import rate_limit
 from app.repository import utc_now_iso
 from app.schemas import AcceptRequest, InventoryItem, InventoryPayload, RaidRequest, RaidStat
@@ -40,6 +41,11 @@ class StatusInfo(BaseModel):
     mode: str
     model: str | None
     database: str
+
+
+class ThreatInfo(BaseModel):
+    waste_value_total: float
+    at_risk: list[str]
 
 
 class AcceptResult(BaseModel):
@@ -70,6 +76,18 @@ def list_demo_fridges(services: Services = Depends(get_services)) -> Envelope[li
 @router.get("/inventory", response_model=Envelope[InventoryPayload])
 def get_inventory(services: Services = Depends(get_services)) -> Envelope[InventoryPayload]:
     return Envelope(data=InventoryPayload(items=services.repository.list_items()))
+
+
+@router.post("/threat", response_model=Envelope[ThreatInfo])
+def get_threat(payload: InventoryPayload, services: Services = Depends(get_services)) -> Envelope[ThreatInfo]:
+    """Dollar value of food about to expire: the boss's starting health."""
+    risky = at_risk_items(payload.items, services.catalog)
+    return Envelope(
+        data=ThreatInfo(
+            waste_value_total=waste_value_total(risky),
+            at_risk=sorted(entry.name for entry in risky.values()),
+        )
+    )
 
 
 @router.put(

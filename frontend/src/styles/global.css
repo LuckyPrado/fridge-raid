@@ -1,0 +1,284 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(60rem 36rem at 18% 38%, rgba(160, 225, 245, 0.13), transparent 70%),
+    var(--night);
+  color: var(--frost);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p,
+ul,
+ol {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 3px solid var(--bulb);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.app {
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+  display: grid;
+  gap: var(--space-5);
+}
+
+/* --- masthead --- */
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.masthead__title {
+  font-family: var(--font-display);
+  font-size: var(--pixel-hero);
+  font-weight: 400;
+  line-height: 0.8;
+  letter-spacing: 0.01em;
+  color: var(--ice);
+  text-shadow: 0.06em 0.06em 0 var(--night-line);
+}
+
+.masthead__tag {
+  margin-top: var(--space-2);
+  color: var(--mist);
+}
+
+.masthead__meta {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: end;
+  font-size: var(--text-sm);
+  color: var(--mist);
+  text-align: right;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.switch input {
+  accent-color: var(--bulb);
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* --- banners --- */
+
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-card);
+  border-left: 6px solid;
+  background: var(--night-raised);
+}
+
+.banner--bad {
+  border-color: var(--rot);
+}
+
+.banner--good {
+  border-color: var(--fresh);
+}
+
+.banner button {
+  flex: none;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--night-line);
+  border-radius: var(--radius-chip);
+  background: transparent;
+  font-size: var(--text-sm);
+}
+
+.banner button:hover {
+  border-color: var(--mist);
+}
+
+/* --- buttons --- */
+
+.button {
+  padding: 0.6rem 1.1rem;
+  border: 2px solid transparent;
+  border-radius: var(--radius-card);
+  font-weight: 600;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.button:disabled {
+  opacity: 0.45;
+}
+
+.button--light {
+  background: var(--ice);
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--glass);
+}
+
+.button--light:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.button--light:not(:disabled):active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--glass);
+}
+
+.button--ghost {
+  background: transparent;
+  border-color: currentColor;
+}
+
+.button--ghost:not(:disabled):hover {
+  background: rgba(143, 185, 198, 0.18);
+}
+
+.button--ghost-dark {
+  background: transparent;
+  border-color: var(--night-line);
+  color: var(--mist);
+}
+
+.button--ghost-dark:not(:disabled):hover {
+  border-color: var(--mist);
+  color: var(--frost);
+}
+
+.button--raid {
+  padding: 0.75rem 1.5rem;
+  background: var(--bulb);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--pixel-lg);
+  font-weight: 400;
+  line-height: 1;
+  box-shadow: 0 5px 0 var(--bulb-deep);
+}
+
+.button--raid:not(:disabled):hover {
+  transform: translateY(-2px);
+}
+
+.button--raid:not(:disabled):active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--bulb-deep);
+}
+
+/* --- board layout --- */
+
+.board {
+  display: grid;
+  grid-template-columns: minmax(20rem, 27rem) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.board__fridge,
+.board__stage {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Keep the arena in view while scrolling the fridge, so any shelf can be dragged to it. */
+.board__stage {
+  position: sticky;
+  top: var(--space-4);
+}
+
+.board__empty {
+  padding: var(--space-6) var(--space-4);
+  border: 2px dashed var(--night-line);
+  border-radius: var(--radius-fridge);
+  color: var(--mist);
+  text-align: center;
+}
+
+.drag-ghost {
+  display: block;
+  font-size: 3.25rem;
+  line-height: 1;
+  filter: drop-shadow(0 10px 8px rgba(0, 0, 0, 0.45));
+  transform: rotate(-8deg);
+  cursor: grabbing;
+}
+
+@media (max-width: 56rem) {
+  .board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .board__stage {
+    position: static;
+  }
+
+  .masthead__meta {
+    justify-items: start;
+    text-align: left;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
